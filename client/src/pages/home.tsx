@@ -207,79 +207,89 @@ export default function Home() {
             initial="hidden"
             animate="visible"
           >
-            {projects.map((project, index) => (
-              <motion.div key={project.title} variants={itemVariants}>
-                <Card className={`bg-card border-border hover:border-primary/30 transition-all duration-300 p-8 relative ${
-                  project.featured ? 'border-primary/20' : ''
-                } ${index === projects.length - 1 ? 'md:col-span-2' : ''}`}>
-                  {project.featured && (
-                    <div className="absolute -top-3 left-8">
-                      <Badge className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide">
-                        <Star className="w-3 h-3 mr-1" />
-                        Featured
-                      </Badge>
-                    </div>
-                  )}
+            {/* Featured project - human2robot - Full width */}
+            <motion.div variants={itemVariants}>
+              <Card className="bg-card border-border hover:border-primary/30 transition-all duration-300 p-8 relative border-primary/20">
+                <div className="absolute -top-3 left-8">
+                  <Badge className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide">
+                    <Star className="w-3 h-3 mr-1" />
+                    Featured
+                  </Badge>
+                </div>
 
-                  <div className="mb-6">
-                    <h3 className="text-2xl font-bold text-foreground mb-3">{project.title}</h3>
-                    <p className="text-muted-foreground leading-relaxed mb-4">
-                      {project.description}
-                    </p>
-                  </div>
+                <div className="mb-6">
+                  <h3 className="text-2xl font-bold text-foreground mb-3">human2robot</h3>
+                  <p className="text-muted-foreground leading-relaxed mb-4">
+                    Coordination and data layer for the robotic age. Training data platform using imitation learning from human hand video recordings. Won 2 hackathons and secured YC interview.
+                  </p>
+                </div>
 
-                  <div className="flex flex-wrap gap-2 mb-6">
-                    {project.skills.map((skill) => (
-                      <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {["Python", "ROS", "Isaac Gym", "Hugging Face", "Computer Vision"].map((skill) => (
+                    <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
+                      {skill}
+                    </Badge>
+                  ))}
+                </div>
 
-                  <div className="flex flex-wrap gap-3">
-                    {project.buttons.map((button, buttonIndex) => {
-                      const IconComponent = button.icon;
-                      return (
-                        <Button
-                          key={buttonIndex}
-                          variant={button.variant}
-                          size="sm"
-                          className={`transition-all duration-200 ${
-                            button.variant === 'default' 
-                              ? 'bg-orange-500 hover:bg-orange-400 text-primary-foreground' 
-                              : 'hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200'
-                          }`}
-                        >
-                          <IconComponent className="w-4 h-4 mr-2" />
-                          {button.label}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </motion.div>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-orange-500 hover:bg-orange-400 text-white border border-orange-500 hover:border-orange-400"
+                  >
+                    <Github className="w-4 h-4 mr-2" />
+                    GitHub
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
 
-          {/* Two-column grid for regular projects after featured */}
-          <motion.div 
-            className="grid md:grid-cols-2 gap-8 mt-8"
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            {projects.slice(1, -1).map((project, index) => (
-              <motion.div key={project.title} variants={itemVariants}>
+            {/* K2 AI - Full width */}
+            <motion.div variants={itemVariants}>
+              <Card className="bg-card border-border hover:border-primary/30 transition-all duration-300 p-8">
+                <div className="mb-6">
+                  <h3 className="text-2xl font-bold text-foreground mb-3">K2 AI</h3>
+                  <p className="text-muted-foreground leading-relaxed mb-4">
+                    Co-founded AI startup, scaled to 10 employees and >€500k revenue. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {["LLMs", "SaaS", "AI Automation"].map((skill) => (
+                    <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
+                      {skill}
+                    </Badge>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="border border-border hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200"
+                  >
+                    <Linkedin className="w-4 h-4 mr-2" />
+                    LinkedIn
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Grid for smaller projects */}
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* RL Projects */}
+              <motion.div variants={itemVariants}>
                 <Card className="bg-card border-border hover:border-primary/30 transition-all duration-300 p-6 h-full">
                   <div className="mb-4">
-                    <h3 className="text-xl font-bold text-foreground mb-3">{project.title}</h3>
+                    <h3 className="text-xl font-bold text-foreground mb-3">RL Projects</h3>
                     <p className="text-muted-foreground leading-relaxed mb-4">
-                      {project.description}
+                      Reinforcement learning implementations including Monte Carlo Tree Search for wildfire suppression and autonomous control systems.
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {project.skills.map((skill) => (
+                    {["PyTorch", "MCTS", "OpenAI Gym"].map((skill) => (
                       <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
                         {skill}
                       </Badge>
@@ -287,66 +297,111 @@ export default function Home() {
                   </div>
 
                   <div className="flex flex-wrap gap-3">
-                    {project.buttons.map((button, buttonIndex) => {
-                      const IconComponent = button.icon;
-                      return (
-                        <Button
-                          key={buttonIndex}
-                          variant={button.variant}
-                          size="sm"
-                          className="hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200"
-                        >
-                          <IconComponent className="w-4 h-4 mr-2" />
-                          {button.label}
-                        </Button>
-                      );
-                    })}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="border border-border hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200"
+                    >
+                      <Github className="w-4 h-4 mr-2" />
+                      GitHub
+                    </Button>
                   </div>
                 </Card>
               </motion.div>
-            ))}
-          </motion.div>
 
-          {/* Last project full width */}
-          <motion.div
-            className="mt-8"
-            variants={itemVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            <Card className="bg-card border-border hover:border-primary/30 transition-all duration-300 p-6">
-              <div className="mb-4">
-                <h3 className="text-xl font-bold text-foreground mb-3">{projects[projects.length - 1].title}</h3>
-                <p className="text-muted-foreground leading-relaxed mb-4">
-                  {projects[projects.length - 1].description}
-                </p>
-              </div>
+              {/* Wildfire Suppression Model */}
+              <motion.div variants={itemVariants}>
+                <Card className="bg-card border-border hover:border-primary/30 transition-all duration-300 p-6 h-full">
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-foreground mb-3">Wildfire Suppression Model</h3>
+                    <p className="text-muted-foreground leading-relaxed mb-4">
+                      Master thesis project developing MDP wildfire model with Monte-Carlo Tree Search optimization. Published first-author paper in Combustion Science & Technology.
+                    </p>
+                  </div>
 
-              <div className="flex flex-wrap gap-2 mb-4">
-                {projects[projects.length - 1].skills.map((skill) => (
-                  <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
-                    {skill}
-                  </Badge>
-                ))}
-              </div>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {["MCTS", "Optimization", "Research"].map((skill) => (
+                      <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
 
-              <div className="flex flex-wrap gap-3">
-                {projects[projects.length - 1].buttons.map((button, buttonIndex) => {
-                  const IconComponent = button.icon;
-                  return (
+                  <div className="flex flex-wrap gap-3">
                     <Button
-                      key={buttonIndex}
-                      variant={button.variant}
+                      variant="secondary"
                       size="sm"
-                      className="hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200"
+                      className="border border-border hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200"
                     >
-                      <IconComponent className="w-4 h-4 mr-2" />
-                      {button.label}
+                      <FileText className="w-4 h-4 mr-2" />
+                      Paper
                     </Button>
-                  );
-                })}
-              </div>
-            </Card>
+                  </div>
+                </Card>
+              </motion.div>
+
+              {/* Biomechanical Exoskeleton */}
+              <motion.div variants={itemVariants}>
+                <Card className="bg-card border-border hover:border-primary/30 transition-all duration-300 p-6 h-full">
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-foreground mb-3">Biomechanical Exoskeleton</h3>
+                    <p className="text-muted-foreground leading-relaxed mb-4">
+                      Gravity-compensating shoulder exoskeleton for Long-COVID patients. Built with Arduino Mega, PID control, and conducted user testing.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {["Arduino", "PID Control", "Biomechanics"].map((skill) => (
+                      <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="border border-border hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200"
+                    >
+                      <Youtube className="w-4 h-4 mr-2" />
+                      Demo
+                    </Button>
+                  </div>
+                </Card>
+              </motion.div>
+
+              {/* Photos from Stratosphere */}
+              <motion.div variants={itemVariants}>
+                <Card className="bg-card border-border hover:border-primary/30 transition-all duration-300 p-6 h-full">
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-foreground mb-3">Photos from Stratosphere</h3>
+                    <p className="text-muted-foreground leading-relaxed mb-4">
+                      High-altitude photography project capturing stunning images from the stratosphere using weather balloons and custom camera systems. Engineering challenge combining electronics, atmospheric physics, and photography.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {["Electronics", "Photography", "Atmospheric Physics"].map((skill) => (
+                      <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="border border-border hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200"
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      Gallery
+                    </Button>
+                  </div>
+                </Card>
+              </motion.div>
+            </div>
           </motion.div>
         </section>
 
@@ -388,7 +443,7 @@ export default function Home() {
                 <span className="font-medium">Instagram</span>
               </a>
             </div>
-            <p className="text-muted-foreground text-sm">© 2024 Jonas Petersen. Available from 10/25.</p>
+            <p className="text-muted-foreground text-sm">© 2025 Jonas Petersen.</p>
           </div>
         </motion.footer>
       </main>
