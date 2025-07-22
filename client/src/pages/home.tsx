@@ -143,7 +143,7 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="pt-20">
-        {/* About Section */}
+        {/* Hero Section */}
         <section className="max-w-4xl mx-auto px-6 py-16">
           <motion.div 
             className="text-center mb-16"
@@ -158,6 +158,37 @@ export default function Home() {
               Computational engineer with AI/robotics expertise. Co-founded and scaled AI startup to €500k revenue. 
               Cambridge MPhil, Imperial MEng. Building the future of human-robot interaction.
             </p>
+          </motion.div>
+        </section>
+
+        {/* About Section */}
+        <section className="max-w-4xl mx-auto px-6 pb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
+            <Card className="bg-card border-border p-8">
+              <h2 className="text-3xl font-bold text-foreground mb-6">About Me</h2>
+              <div className="space-y-4 text-muted-foreground leading-relaxed">
+                <p>
+                  I'm a German engineer and founder drawn to embodied AI, where robots learn to move and think like humans. 
+                  My work spans developing advanced robotics systems to creating innovative AI solutions that solve real-world problems. 
+                  I was educated at Imperial College and Cambridge University.
+                </p>
+                <p>
+                  With a background in mechanical engineering and computing, I've led projects ranging from biomechanical 
+                  exoskeletons to reinforcement learning training data pipelines. I co-founded and scaled a tech startup to 
+                  €500k in revenues, less than 12 months out of uni. To me, solving embodied AI is the most challenging 
+                  and enticing problem of our time.
+                </p>
+                <p>
+                  Humanity is on track to be 100M workers short by 2030 alone due to our post-modern ageing society. 
+                  Embodied AI can fix this. And I would like my future family to live a life as beautiful and better than 
+                  what I am so grateful for living today. Extremely excited to be alive right now and make a dent!
+                </p>
+              </div>
+            </Card>
           </motion.div>
         </section>
 
