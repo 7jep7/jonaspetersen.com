@@ -8,6 +8,16 @@ This is a modern portfolio website built with a full-stack TypeScript architectu
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+- Fixed JSX syntax error in home.tsx (> character properly escaped as &gt;)
+- Created Vercel deployment configuration (vercel.json)  
+- Added comprehensive README.md with setup instructions
+- Created deployment guide (DEPLOYMENT.md)
+- Updated .gitignore for production deployment
+- Created .env.example for environment variable reference
+- Prepared project for GitHub push and Vercel deployment (July 22, 2025)
+
 ## System Architecture
 
 ### Frontend Architecture
@@ -97,3 +107,17 @@ Preferred communication style: Simple, everyday language.
 - **Static Files**: Served from build output directory
 
 The architecture emphasizes type safety, developer experience, and scalability while maintaining a clean separation of concerns between frontend presentation, backend business logic, and data persistence layers.
+
+## Deployment Configuration
+
+### Vercel Setup
+- **Configuration**: vercel.json configured for full-stack deployment
+- **Build Process**: Frontend builds to dist/public, backend to dist/index.js
+- **Routing**: API routes forwarded to Express backend, static files served directly
+- **Environment**: Requires DATABASE_URL for PostgreSQL connection
+
+### GitHub Repository
+- **Target**: https://github.com/7jep7/jonaspetersen.com
+- **Strategy**: Direct replacement of existing Remix application
+- **Deployment**: Automatic Vercel deployment on main branch push
+- **Domain**: jonaspetersen.com (existing custom domain configuration)
