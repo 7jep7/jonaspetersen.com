@@ -9,20 +9,22 @@
   --muted-foreground: hsl(0, 0%, 64%);
   --popover: hsl(0, 0%, 4%);
   --popover-foreground: hsl(0, 0%, 100%);
-  --card: hsl(0, 0%, 10%);
+  --card: hsl(20, 8%, 8%);
   --card-foreground: hsl(0, 0%, 100%);
-  --border: hsl(0, 0%, 15%);
-  --input: hsl(0, 0%, 15%);
+  --border: hsl(20, 15%, 12%);
+  --input: hsl(20, 15%, 12%);
   --primary: hsl(20, 95%, 54%);
   --primary-foreground: hsl(0, 0%, 100%);
-  --secondary: hsl(0, 0%, 10%);
+  --secondary: hsl(20, 8%, 8%);
   --secondary-foreground: hsl(0, 0%, 100%);
-  --accent: hsl(0, 0%, 10%);
-  --accent-foreground: hsl(0, 0%, 100%);
+  --accent: hsl(20, 25%, 15%);
+  --accent-foreground: hsl(20, 95%, 54%);
   --destructive: hsl(0, 84%, 60%);
   --destructive-foreground: hsl(0, 0%, 98%);
   --ring: hsl(20, 95%, 54%);
   --radius: 0.75rem;
+  --orange-subtle: hsl(20, 40%, 25%);
+  --orange-glow: hsl(20, 95%, 54%, 0.1);
 }
 
 .dark {
@@ -32,19 +34,21 @@
   --muted-foreground: hsl(0, 0%, 64%);
   --popover: hsl(0, 0%, 4%);
   --popover-foreground: hsl(0, 0%, 100%);
-  --card: hsl(0, 0%, 10%);
+  --card: hsl(20, 8%, 8%);
   --card-foreground: hsl(0, 0%, 100%);
-  --border: hsl(0, 0%, 15%);
-  --input: hsl(0, 0%, 15%);
+  --border: hsl(20, 15%, 12%);
+  --input: hsl(20, 15%, 12%);
   --primary: hsl(20, 95%, 54%);
   --primary-foreground: hsl(0, 0%, 100%);
-  --secondary: hsl(0, 0%, 10%);
+  --secondary: hsl(20, 8%, 8%);
   --secondary-foreground: hsl(0, 0%, 100%);
-  --accent: hsl(0, 0%, 10%);
-  --accent-foreground: hsl(0, 0%, 100%);
+  --accent: hsl(20, 25%, 15%);
+  --accent-foreground: hsl(20, 95%, 54%);
   --destructive: hsl(0, 84%, 60%);
   --destructive-foreground: hsl(0, 0%, 98%);
   --ring: hsl(20, 95%, 54%);
+  --orange-subtle: hsl(20, 40%, 25%);
+  --orange-glow: hsl(20, 95%, 54%, 0.1);
 }
 
 @layer base {
@@ -73,5 +77,18 @@
   .backdrop-blur-glass {
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+  }
+  
+  .orange-glow {
+    box-shadow: 0 0 20px var(--orange-glow), 0 0 40px var(--orange-glow);
+  }
+  
+  .orange-border-glow {
+    border: 1px solid var(--orange-subtle);
+    box-shadow: 0 0 10px var(--orange-glow);
+  }
+  
+  .subtle-orange-bg {
+    background: linear-gradient(135deg, var(--card) 0%, var(--orange-subtle) 100%);
   }
 }

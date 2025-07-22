@@ -118,14 +118,14 @@ export default function Home() {
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <motion.header 
-        className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-glass border-b border-border"
+        className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-glass border-b orange-border-glow"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
       >
         <div className="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold text-sm">
+            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold text-sm orange-glow">
               JP
             </div>
           </div>
@@ -151,7 +151,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
-            <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6 tracking-tight">
+            <h1 className="text-5xl md:text-6xl font-bold text-gradient mb-6 tracking-tight">
               Jonas Petersen
             </h1>
             <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
@@ -168,7 +168,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
-            <Card className="bg-card border-border p-8">
+            <Card className="subtle-orange-bg orange-border-glow p-8">
               <h2 className="text-3xl font-bold text-foreground mb-6">About Me</h2>
               <div className="space-y-4 text-muted-foreground leading-relaxed">
                 <p>
@@ -212,7 +212,7 @@ export default function Home() {
             {projects.map((project, index) => (
               <motion.div key={project.title} variants={itemVariants}>
                 <Card className={`bg-card border-border hover:border-primary/30 transition-all duration-300 p-8 relative ${
-                  project.featured ? 'border-primary/20' : ''
+                  project.featured ? 'orange-border-glow' : ''
                 } ${index === projects.length - 1 ? 'md:col-span-2' : ''}`}>
                   {project.featured && (
                     <div className="absolute -top-3 left-8">
@@ -364,7 +364,7 @@ export default function Home() {
             <div className="flex justify-center space-x-6 mb-8">
               <a 
                 href="https://linkedin.com/in/jonas-petersen" 
-                className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors duration-200"
+                className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-all duration-200 hover:drop-shadow-[0_0_8px_hsl(20,95%,54%,0.3)]"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -373,7 +373,7 @@ export default function Home() {
               </a>
               <a 
                 href="https://github.com/jonas-petersen" 
-                className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors duration-200"
+                className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-all duration-200 hover:drop-shadow-[0_0_8px_hsl(20,95%,54%,0.3)]"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -382,7 +382,7 @@ export default function Home() {
               </a>
               <a 
                 href="https://instagram.com/jonas.petersen" 
-                className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors duration-200"
+                className="flex items-center space-x-2 text-muted-foreground hover:text-primary transition-all duration-200 hover:drop-shadow-[0_0_8px_hsl(20,95%,54%,0.3)]"
                 target="_blank"
                 rel="noopener noreferrer"
               >
