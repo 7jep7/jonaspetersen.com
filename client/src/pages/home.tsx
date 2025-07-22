@@ -251,7 +251,7 @@ export default function Home() {
                 <div className="mb-6">
                   <h3 className="text-2xl font-bold text-foreground mb-3">K2 AI</h3>
                   <p className="text-muted-foreground leading-relaxed mb-4">
-                    Co-founded AI startup, scaled to 10 employees and >€500k revenue. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.
+                    Co-founded AI startup, scaled to 10 employees and &gt;€500k revenue. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.
                   </p>
                 </div>
 
