@@ -29,13 +29,12 @@ interface Project {
 
 const projects: Project[] = [
   {
-    title: "Lattice - human2robot",
+    title: "human2robot",
     description: "Coordination and data layer for the robotic age. Training data platform using imitation learning from human hand video recordings. Won 2 hackathons and secured YC interview.",
     skills: ["Python", "ROS", "Isaac Gym", "Hugging Face", "Computer Vision"],
     featured: true,
     buttons: [
       { label: "GitHub", icon: Github, variant: "default" as const },
-      { label: "Website", icon: ExternalLink, variant: "secondary" as const }
     ]
   },
   {
@@ -76,7 +75,6 @@ const projects: Project[] = [
     skills: ["Electronics", "Photography", "Atmospheric Physics"],
     buttons: [
       { label: "Gallery", icon: Camera, variant: "secondary" as const },
-      { label: "Kickstarter", icon: ExternalLink, variant: "secondary" as const }
     ]
   }
 ];
@@ -202,7 +200,7 @@ export default function Home() {
           >
             Featured Projects
           </motion.h2>
-          
+
           <motion.div 
             className="space-y-8"
             variants={containerVariants}
@@ -222,14 +220,14 @@ export default function Home() {
                       </Badge>
                     </div>
                   )}
-                  
+
                   <div className="mb-6">
                     <h3 className="text-2xl font-bold text-foreground mb-3">{project.title}</h3>
                     <p className="text-muted-foreground leading-relaxed mb-4">
                       {project.description}
                     </p>
                   </div>
-                  
+
                   <div className="flex flex-wrap gap-2 mb-6">
                     {project.skills.map((skill) => (
                       <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
@@ -237,7 +235,7 @@ export default function Home() {
                       </Badge>
                     ))}
                   </div>
-                  
+
                   <div className="flex flex-wrap gap-3">
                     {project.buttons.map((button, buttonIndex) => {
                       const IconComponent = button.icon;
@@ -248,8 +246,8 @@ export default function Home() {
                           size="sm"
                           className={`transition-all duration-200 ${
                             button.variant === 'default' 
-                              ? 'bg-primary hover:bg-primary/90 text-primary-foreground' 
-                              : 'hover:border-primary/30'
+                              ? 'bg-orange-500 hover:bg-orange-400 text-primary-foreground' 
+                              : 'hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200'
                           }`}
                         >
                           <IconComponent className="w-4 h-4 mr-2" />
@@ -279,7 +277,7 @@ export default function Home() {
                       {project.description}
                     </p>
                   </div>
-                  
+
                   <div className="flex flex-wrap gap-2 mb-4">
                     {project.skills.map((skill) => (
                       <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
@@ -287,7 +285,7 @@ export default function Home() {
                       </Badge>
                     ))}
                   </div>
-                  
+
                   <div className="flex flex-wrap gap-3">
                     {project.buttons.map((button, buttonIndex) => {
                       const IconComponent = button.icon;
@@ -296,7 +294,7 @@ export default function Home() {
                           key={buttonIndex}
                           variant={button.variant}
                           size="sm"
-                          className="hover:border-primary/30 transition-all duration-200"
+                          className="hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200"
                         >
                           <IconComponent className="w-4 h-4 mr-2" />
                           {button.label}
@@ -323,7 +321,7 @@ export default function Home() {
                   {projects[projects.length - 1].description}
                 </p>
               </div>
-              
+
               <div className="flex flex-wrap gap-2 mb-4">
                 {projects[projects.length - 1].skills.map((skill) => (
                   <Badge key={skill} variant="secondary" className="bg-muted text-muted-foreground">
@@ -331,7 +329,7 @@ export default function Home() {
                   </Badge>
                 ))}
               </div>
-              
+
               <div className="flex flex-wrap gap-3">
                 {projects[projects.length - 1].buttons.map((button, buttonIndex) => {
                   const IconComponent = button.icon;
@@ -340,7 +338,7 @@ export default function Home() {
                       key={buttonIndex}
                       variant={button.variant}
                       size="sm"
-                      className="hover:border-primary/30 transition-all duration-200"
+                      className="hover:border-orange-400/40 hover:text-orange-400 transition-all duration-200"
                     >
                       <IconComponent className="w-4 h-4 mr-2" />
                       {button.label}
