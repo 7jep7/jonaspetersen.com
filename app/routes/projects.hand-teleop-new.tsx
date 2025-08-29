@@ -34,7 +34,9 @@ const ROBOTS = [
   { id: 'ur5e', name: 'UR5e', dof: 6, description: 'Universal Robots collaborative arm for precise manipulation' },
   { id: 'franka', name: 'Franka Emika Panda', dof: 7, description: 'Research robot with torque sensors in every joint' },
   { id: 'kinova', name: 'Kinova Gen3', dof: 7, description: 'Lightweight carbon fiber arm for research applications' },
-  { id: 'kuka', name: 'KUKA LBR iiwa', dof: 7, description: 'Sensitive lightweight robot for human-robot collaboration' }
+  { id: 'kuka', name: 'KUKA LBR iiwa', dof: 7, description: 'Sensitive lightweight robot for human-robot collaboration' },
+  { id: 'so101', name: 'SO-101 Humanoid Hand', dof: 5, description: 'Dexterous robotic hand' },
+  { id: 'simulation', name: 'Simulation Mode', dof: 6, description: 'Virtual robot for testing' }
 ];
 
 const HAND_MODELS = [
@@ -60,6 +62,7 @@ interface RobotState {
   confidence: number;
 }
 
+
 export default function HandTeleopProject() {
   // State management
   const [selectedRobot, setSelectedRobot] = useState('ur5e');
@@ -69,7 +72,9 @@ export default function HandTeleopProject() {
   const [isTracking, setIsTracking] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [apiStatus, setApiStatus] = useState('checking');
-  
+  // Output console state
+  const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
+
   // Data state
   const [fingertipData, setFingertipData] = useState<FingertipData>({
     thumb: null,
@@ -94,6 +99,12 @@ export default function HandTeleopProject() {
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number>();
 
+  // Helper function to log messages
+  const addToConsole = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setConsoleLogs(prev => [`[${timestamp}] ${message}`, ...prev].slice(0, 50)); // Keep last 50 logs
+  };
+
   // Check API status on mount
   useEffect(() => {
     checkApiStatus();
@@ -104,11 +115,14 @@ export default function HandTeleopProject() {
       const response = await fetch(`${API_BASE}/health`);
       if (response.ok) {
         setApiStatus('connected');
+        addToConsole('Backend API connected successfully');
       } else {
         setApiStatus('error');
+        addToConsole('Backend API returned error status');
       }
     } catch (error) {
       setApiStatus('error');
+      addToConsole('Backend API connection failed');
     }
   };
 
@@ -122,8 +136,10 @@ export default function HandTeleopProject() {
         videoRef.current.srcObject = stream;
       }
       setIsCameraActive(true);
+      addToConsole('Camera started successfully');
     } catch (error) {
       console.error("Camera access denied:", error);
+      addToConsole('Camera access denied');
       alert("Camera access is required for hand tracking");
     }
   };
@@ -138,10 +154,12 @@ export default function HandTeleopProject() {
     }
     setIsCameraActive(false);
     setIsTracking(false);
+    addToConsole('Camera stopped');
   };
 
   const connectToRobot = async () => {
     try {
+      addToConsole(`Connecting to robot: ${selectedRobot}`);
       const response = await fetch(`${API_BASE}/connect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -150,25 +168,31 @@ export default function HandTeleopProject() {
       
       if (response.ok) {
         setIsConnected(true);
+        addToConsole('Robot connected successfully');
       } else {
+        addToConsole('Failed to connect to robot');
         alert("Failed to connect to robot");
       }
     } catch (error) {
+      addToConsole('Connection error');
       alert("Connection error");
     }
   };
 
   const startTracking = () => {
     if (!isCameraActive) {
+      addToConsole('Please start camera first');
       alert("Please start camera first");
       return;
     }
     setIsTracking(true);
+    addToConsole('Hand tracking started');
     processHandTracking();
   };
 
   const stopTracking = () => {
     setIsTracking(false);
+    addToConsole('Hand tracking stopped');
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
     }
@@ -182,9 +206,8 @@ export default function HandTeleopProject() {
       indexTip: { x: Math.random() * 100, y: Math.random() * 100, z: Math.random() * 100 },
       timestamp: Date.now()
     };
-    
     setFingertipData(simulatedData);
-    
+    addToConsole('Simulated hand tracking data updated');
     const newRobotState: RobotState = {
       jointAngles: simulatedData.indexTip ? [
         (simulatedData.indexTip.x - 50) * 0.02,
@@ -201,9 +224,7 @@ export default function HandTeleopProject() {
       inWorkspace: true,
       confidence: 0.85 + Math.random() * 0.15
     };
-    
     setRobotState(newRobotState);
-    
     if (isTracking) {
       animationRef.current = requestAnimationFrame(processHandTracking);
     }
@@ -491,6 +512,34 @@ export default function HandTeleopProject() {
                     <ExternalLink className="h-3 w-3 mr-1" />
                     API Docs
                   </Button>
+                </div>
+              </div>
+              {/* Output Console */}
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium flex items-center gap-2 text-white">
+                    <span className="inline-block"><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5-6h2a2 2 0 012 2v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6a2 2 0 012-2h2"></path></svg></span>
+                    Output Console
+                  </h3>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => setConsoleLogs([])}
+                    className="text-gray-300 border-gray-600 hover:border-orange-500 hover:text-orange-500"
+                  >
+                    Clear
+                  </Button>
+                </div>
+                <div className="bg-gray-900 border border-gray-600 rounded-lg p-3 h-32 overflow-y-auto">
+                  {consoleLogs.length === 0 ? (
+                    <div className="text-gray-400 text-xs">Console output will appear here...</div>
+                  ) : (
+                    <div className="text-xs font-mono space-y-1">
+                      {consoleLogs.map((log, index) => (
+                        <div key={index} className="text-gray-300">{log}</div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
