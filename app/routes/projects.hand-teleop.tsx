@@ -254,10 +254,17 @@ export default function HandTeleopProject() {
       handTrackingApiRef.current.onConnectionChange = (connected: boolean) => {
         setWsConnected(connected);
         if (connected) {
-          addToConsole('✅ WebSocket connected successfully - Ready for hand tracking');
+          addToConsole('✅ WebSocket connected successfully - Starting hand tracking automatically');
           setWsError(null);
+          // Automatically start tracking when WebSocket connects
+          setIsTracking(true);
+          sendFramesLoop();
         } else {
           addToConsole('❌ WebSocket disconnected');
+          setIsTracking(false);
+          if (animationRef.current) {
+            cancelAnimationFrame(animationRef.current);
+          }
         }
       };
       
@@ -351,13 +358,12 @@ export default function HandTeleopProject() {
     }
     
     if (!wsConnected) {
-      addToConsole('WebSocket not connected. Please wait for connection or check backend status.');
-      alert("WebSocket not connected. Please wait for connection or check backend status.");
+      addToConsole('WebSocket not connected. Tracking will start automatically when connected.');
       return;
     }
     
     setIsTracking(true);
-    addToConsole('Hand tracking started - sending video frames to backend');
+    addToConsole('📹 Manual hand tracking started - sending video frames to backend');
     
     // Start sending frames
     sendFramesLoop();
@@ -550,7 +556,7 @@ export default function HandTeleopProject() {
                 
                 <Button 
                   onClick={isTracking ? stopTracking : startTracking}
-                  disabled={!isConnected || !isCameraActive || (!wsConnected && !isTracking)}
+                  disabled={!isConnected || !isCameraActive}
                   variant={isTracking ? "outline" : "default"}
                 >
                   {isTracking ? (
@@ -562,8 +568,8 @@ export default function HandTeleopProject() {
                     <>
                       <Play className="h-4 w-4 mr-2" />
                       {!isCameraActive ? "Start Camera First" : 
-                       !wsConnected ? "Connecting..." : 
-                       "Start Control"}
+                       !wsConnected ? "Auto-tracking will begin" : 
+                       "Manual Control"}
                     </>
                   )}
                 </Button>
@@ -662,9 +668,9 @@ export default function HandTeleopProject() {
                         ) : wsConnected && !isTracking ? (
                           <div className="w-full h-full flex items-center justify-center text-gray-400">
                             <div className="text-center">
-                              <Play className="h-12 w-12 mx-auto mb-2 text-green-400" />
-                              <p className="text-green-400">Ready for hand tracking!</p>
-                              <p className="text-sm text-gray-400">Click "Start Control" to begin tracking</p>
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto mb-2"></div>
+                              <p className="text-green-400">Starting hand tracking...</p>
+                              <p className="text-sm text-gray-400">Hand detection will begin momentarily</p>
                             </div>
                           </div>
                         ) : (
