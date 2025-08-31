@@ -4,6 +4,94 @@ import { Card } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { useState, useEffect, useRef } from "react";
+// HandTrackingAPI for websocket integration
+interface HandTrackingResult {
+  fingertip_coords?: {
+    thumb?: { x: number; y: number };
+    index_tip?: { x: number; y: number };
+    index_pip?: { x: number; y: number };
+    base_joint?: { x: number; y: number };
+  };
+}
+
+class HandTrackingAPI {
+  apiUrl: string;
+  ws: WebSocket | null;
+  onTrackingResult: ((result: HandTrackingResult) => void) | null;
+  onConnectionChange: ((connected: boolean) => void) | null;
+  onError: ((error: string) => void) | null;
+
+  constructor(apiUrl: string) {
+    this.apiUrl = apiUrl.replace('https:', 'wss:');
+    this.ws = null;
+    this.onTrackingResult = null;
+    this.onConnectionChange = null;
+    this.onError = null;
+  }
+
+  connect() {
+    try {
+      this.ws = new WebSocket(`${this.apiUrl}/api/tracking/live`);
+      
+      this.ws.onopen = () => {
+        console.log('✅ Connected to hand tracking API');
+        if (this.onConnectionChange) this.onConnectionChange(true);
+      };
+      
+      this.ws.onmessage = (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'tracking_result' && this.onTrackingResult) {
+            this.onTrackingResult(data.data);
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+          if (this.onError) this.onError(`Error parsing message: ${error}`);
+        }
+      };
+      
+      this.ws.onerror = (error: Event) => {
+        console.error('WebSocket error:', error);
+        if (this.onError) this.onError('WebSocket connection error');
+      };
+      
+      this.ws.onclose = (event: CloseEvent) => {
+        console.log('WebSocket connection closed:', event.code, event.reason);
+        if (this.onConnectionChange) this.onConnectionChange(false);
+        if (event.code !== 1000) { // Not a normal closure
+          if (this.onError) this.onError(`Connection closed unexpectedly: ${event.reason || 'Unknown reason'}`);
+        }
+      };
+    } catch (error) {
+      console.error('Failed to create WebSocket:', error);
+      if (this.onError) this.onError(`Failed to create WebSocket: ${error}`);
+    }
+  }
+
+  sendFrame(canvas: HTMLCanvasElement) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      try {
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        this.ws.send(JSON.stringify({
+          type: 'image',
+          data: imageData,
+          robot_type: 'so101',
+          tracking_mode: 'mediapipe'
+        }));
+      } catch (error) {
+        console.error('Error sending frame:', error);
+        if (this.onError) this.onError(`Error sending frame: ${error}`);
+      }
+    }
+  }
+
+  disconnect() {
+    if (this.ws) {
+      this.ws.close(1000, 'Manual disconnect');
+      this.ws = null;
+    }
+  }
+}
 import { 
   Camera, 
   CameraOff, 
@@ -76,6 +164,15 @@ export default function HandTeleopProject() {
   const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
 
   // Data state
+  const [trackingResult, setTrackingResult] = useState<HandTrackingResult | null>(null);
+  const [handVisible, setHandVisible] = useState(false);
+  const [gripperClosed, setGripperClosed] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsError, setWsError] = useState<string | null>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const handTrackingApiRef = useRef<HandTrackingAPI | null>(null);
+
+  // Data state
   const [fingertipData, setFingertipData] = useState<FingertipData>({
     thumb: null,
     indexPip: null,
@@ -137,6 +234,9 @@ export default function HandTeleopProject() {
       }
       setIsCameraActive(true);
       addToConsole('Camera started successfully');
+      
+      // Automatically start WebSocket connection when camera starts
+      setupWebSocketConnection();
     } catch (error) {
       console.error("Camera access denied:", error);
       addToConsole('Camera access denied');
@@ -144,9 +244,56 @@ export default function HandTeleopProject() {
     }
   };
 
+  const setupWebSocketConnection = () => {
+    setWsError(null);
+    addToConsole('Establishing WebSocket connection...');
+    
+    if (!handTrackingApiRef.current) {
+      handTrackingApiRef.current = new HandTrackingAPI(API_BASE);
+      
+      handTrackingApiRef.current.onConnectionChange = (connected: boolean) => {
+        setWsConnected(connected);
+        if (connected) {
+          addToConsole('✅ WebSocket connected successfully - Ready for hand tracking');
+          setWsError(null);
+        } else {
+          addToConsole('❌ WebSocket disconnected');
+        }
+      };
+      
+      handTrackingApiRef.current.onError = (error: string) => {
+        setWsError(error);
+        addToConsole(`❌ WebSocket error: ${error}`);
+      };
+      
+      handTrackingApiRef.current.onTrackingResult = (result: HandTrackingResult) => {
+        setTrackingResult(result);
+        setHandVisible(!!result?.fingertip_coords);
+        // Gripper closed if thumb and index tip are close
+        if (result?.fingertip_coords) {
+          const thumb = result.fingertip_coords.thumb;
+          const indexTip = result.fingertip_coords.index_tip;
+          if (thumb && indexTip) {
+            const dist = Math.sqrt(
+              Math.pow(thumb.x - indexTip.x, 2) +
+              Math.pow(thumb.y - indexTip.y, 2)
+            );
+            setGripperClosed(dist < 30); // threshold px
+          } else {
+            setGripperClosed(false);
+          }
+        } else {
+          setGripperClosed(false);
+        }
+      };
+      
+      handTrackingApiRef.current.connect();
+    }
+  };
+
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
       streamRef.current = null;
     }
     if (videoRef.current) {
@@ -154,7 +301,24 @@ export default function HandTeleopProject() {
     }
     setIsCameraActive(false);
     setIsTracking(false);
-    addToConsole('Camera stopped');
+    setWsConnected(false);
+    setWsError(null);
+    setTrackingResult(null);
+    setHandVisible(false);
+    setGripperClosed(false);
+    
+    // Disconnect WebSocket
+    if (handTrackingApiRef.current) {
+      handTrackingApiRef.current.disconnect();
+      handTrackingApiRef.current = null;
+    }
+    
+    // Stop frame sending loop
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    
+    addToConsole('Camera stopped and WebSocket disconnected');
   };
 
   const connectToRobot = async () => {
@@ -185,50 +349,102 @@ export default function HandTeleopProject() {
       alert("Please start camera first");
       return;
     }
+    
+    if (!wsConnected) {
+      addToConsole('WebSocket not connected. Please wait for connection or check backend status.');
+      alert("WebSocket not connected. Please wait for connection or check backend status.");
+      return;
+    }
+    
     setIsTracking(true);
-    addToConsole('Hand tracking started');
-    processHandTracking();
+    addToConsole('Hand tracking started - sending video frames to backend');
+    
+    // Start sending frames
+    sendFramesLoop();
   };
 
   const stopTracking = () => {
     setIsTracking(false);
+    setWsConnected(false);
+    setWsError(null);
     addToConsole('Hand tracking stopped');
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
     }
-  };
-
-  const processHandTracking = () => {
-    // Simulate hand tracking data
-    const simulatedData: FingertipData = {
-      thumb: { x: Math.random() * 100, y: Math.random() * 100, z: Math.random() * 100 },
-      indexPip: { x: Math.random() * 100, y: Math.random() * 100, z: Math.random() * 100 },
-      indexTip: { x: Math.random() * 100, y: Math.random() * 100, z: Math.random() * 100 },
-      timestamp: Date.now()
-    };
-    setFingertipData(simulatedData);
-    addToConsole('Simulated hand tracking data updated');
-    const newRobotState: RobotState = {
-      jointAngles: simulatedData.indexTip ? [
-        (simulatedData.indexTip.x - 50) * 0.02,
-        (simulatedData.indexTip.y - 50) * 0.02,
-        (simulatedData.indexTip.z - 50) * 0.02,
-        0, 0, 0
-      ] : [0, 0, 0, 0, 0, 0],
-      endEffectorPose: {
-        position: simulatedData.indexTip || { x: 0, y: 0, z: 0 },
-        orientation: { roll: 0, pitch: 0, yaw: 0 }
-      },
-      gripperState: simulatedData.thumb && simulatedData.indexTip ? 
-        (Math.abs(simulatedData.thumb.x - simulatedData.indexTip.x) < 20 ? 'closed' : 'open') : 'open',
-      inWorkspace: true,
-      confidence: 0.85 + Math.random() * 0.15
-    };
-    setRobotState(newRobotState);
-    if (isTracking) {
-      animationRef.current = requestAnimationFrame(processHandTracking);
+    if (handTrackingApiRef.current) {
+      handTrackingApiRef.current.disconnect();
+      handTrackingApiRef.current = null;
     }
   };
+
+  // Send frames to backend via websocket
+  const sendFramesLoop = () => {
+    if (!isTracking || !videoRef.current || !canvasRef.current || !handTrackingApiRef.current) return;
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    handTrackingApiRef.current.sendFrame(canvas);
+    animationRef.current = requestAnimationFrame(sendFramesLoop);
+  };
+
+  // Draw overlay points on second canvas
+  useEffect(() => {
+    if (!trackingResult || !overlayCanvasRef.current || !videoRef.current) return;
+    
+    const canvas = overlayCanvasRef.current;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Draw video frame
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Draw points
+    if (trackingResult.fingertip_coords) {
+      const { thumb, index_tip, index_pip, base_joint } = trackingResult.fingertip_coords;
+      ctx.fillStyle = 'rgba(255, 165, 0, 0.8)';
+      if (thumb) {
+        ctx.beginPath();
+        ctx.arc(thumb.x, thumb.y, 8, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      if (index_tip) {
+        ctx.beginPath();
+        ctx.arc(index_tip.x, index_tip.y, 8, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      if (index_pip) {
+        ctx.beginPath();
+        ctx.arc(index_pip.x, index_pip.y, 8, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      if (base_joint) {
+        ctx.beginPath();
+        ctx.arc(base_joint.x, base_joint.y, 8, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+    
+    // Draw hand/gripper status icons
+    if (handVisible) {
+      ctx.font = '24px sans-serif';
+      ctx.fillStyle = gripperClosed ? 'rgba(0,200,0,0.8)' : 'rgba(255,255,255,0.8)';
+      ctx.fillText(gripperClosed ? '🤏' : '🖐️', 30, 40);
+    } else {
+      ctx.font = '24px sans-serif';
+      ctx.fillStyle = 'rgba(200,0,0,0.8)';
+      ctx.fillText('🚫', 30, 40);
+    }
+  }, [trackingResult, handVisible, gripperClosed]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -334,7 +550,7 @@ export default function HandTeleopProject() {
                 
                 <Button 
                   onClick={isTracking ? stopTracking : startTracking}
-                  disabled={!isConnected || !isCameraActive}
+                  disabled={!isConnected || !isCameraActive || (!wsConnected && !isTracking)}
                   variant={isTracking ? "outline" : "default"}
                 >
                   {isTracking ? (
@@ -345,7 +561,9 @@ export default function HandTeleopProject() {
                   ) : (
                     <>
                       <Play className="h-4 w-4 mr-2" />
-                      Start Control
+                      {!isCameraActive ? "Start Camera First" : 
+                       !wsConnected ? "Connecting..." : 
+                       "Start Control"}
                     </>
                   )}
                 </Button>
@@ -363,62 +581,123 @@ export default function HandTeleopProject() {
               </Badge>
             </div>
             
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <Button
-                  onClick={startCamera}
-                  disabled={isCameraActive}
-                  size="sm"
-                  className="flex-1"
-                >
-                  {isCameraActive ? (
-                    <>
-                      <Camera className="h-4 w-4 mr-2" />
-                      Camera Active
-                    </>
-                  ) : (
-                    <>
-                      <CameraOff className="h-4 w-4 mr-2" />
-                      Start Camera
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={stopCamera}
-                  disabled={!isCameraActive}
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                >
-                  Stop
-                </Button>
-              </div>
-              
-              <div className="bg-gray-900 rounded-lg overflow-hidden aspect-video">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                  style={{ display: isCameraActive ? 'block' : 'none' }}
-                />
-                <canvas
-                  ref={canvasRef}
-                  className="absolute top-0 left-0 w-full h-full"
-                  style={{ display: isCameraActive ? 'block' : 'none' }}
-                />
-                {!isCameraActive && (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400">
-                    <div className="text-center">
-                      <CameraOff className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p className="text-gray-400">Camera feed will appear here</p>
-                      <p className="text-sm text-gray-400">Grant camera access to start</p>
-                    </div>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Button
+                    onClick={startCamera}
+                    disabled={isCameraActive}
+                    size="sm"
+                    className="flex-1"
+                  >
+                    {isCameraActive ? (
+                      <>
+                        <Camera className="h-4 w-4 mr-2" />
+                        Camera Active
+                      </>
+                    ) : (
+                      <>
+                        <CameraOff className="h-4 w-4 mr-2" />
+                        Start Camera
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={stopCamera}
+                    disabled={!isCameraActive}
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                  >
+                    Stop
+                  </Button>
+                </div>
+                
+                {/* Raw Camera Feed */}
+                <div>
+                  <h3 className="text-sm font-medium mb-2 text-white">Raw Camera Feed</h3>
+                  <div className="bg-gray-900 rounded-lg overflow-hidden aspect-video">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                      style={{ display: isCameraActive ? 'block' : 'none' }}
+                    />
+                    {/* Hidden canvas for frame capture */}
+                    <canvas
+                      ref={canvasRef}
+                      style={{ display: 'none' }}
+                    />
+                    {!isCameraActive && (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <div className="text-center">
+                          <CameraOff className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                          <p className="text-gray-400">Raw camera feed will appear here</p>
+                          <p className="text-sm text-gray-400">Grant camera access to start</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+
+                {/* Processed Feed with Hand Tracking */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-white">Hand Tracking Feed</h3>
+                    {isCameraActive && (
+                      <Badge variant={wsConnected ? "default" : "destructive"} className="text-xs">
+                        {wsConnected ? "🟢 Connected" : "🔴 Disconnected"}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="bg-gray-900 rounded-lg overflow-hidden aspect-video relative">
+                    {isCameraActive ? (
+                      <>
+                        {wsConnected && isTracking ? (
+                          <canvas
+                            ref={overlayCanvasRef}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : wsConnected && !isTracking ? (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400">
+                            <div className="text-center">
+                              <Play className="h-12 w-12 mx-auto mb-2 text-green-400" />
+                              <p className="text-green-400">Ready for hand tracking!</p>
+                              <p className="text-sm text-gray-400">Click "Start Control" to begin tracking</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
+                            <div className="text-center text-white">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-2"></div>
+                              <p className="text-sm">Connecting to backend...</p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                Establishing WebSocket connection
+                              </p>
+                              {wsError && (
+                                <div className="mt-3 p-2 bg-red-900/20 rounded text-xs text-red-400 max-w-xs">
+                                  <p className="font-medium">Connection Failed</p>
+                                  <p>{wsError}</p>
+                                  <p className="text-gray-400 mt-1">Check Analytics panel for details</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <div className="text-center">
+                          <Camera className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                          <p className="text-gray-400">Start camera to connect to backend</p>
+                          <p className="text-sm text-gray-400">WebSocket will connect automatically</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
           </Card>
         </div>
 
@@ -465,14 +744,40 @@ export default function HandTeleopProject() {
                     Hand Tracking
                   </h3>
                   <div className="text-xs font-mono text-gray-300 space-y-1">
-                    {fingertipData.thumb && fingertipData.indexTip ? (
+                    {trackingResult?.fingertip_coords ? (
                       <>
-                        <div className="text-gray-300">Thumb: ({fingertipData.thumb.x.toFixed(1)}, {fingertipData.thumb.y.toFixed(1)}, {fingertipData.thumb.z.toFixed(1)})</div>
-                        <div className="text-gray-300">Index: ({fingertipData.indexTip?.x.toFixed(1)}, {fingertipData.indexTip?.y.toFixed(1)}, {fingertipData.indexTip?.z.toFixed(1)})</div>
-                        <div className="text-gray-300">Updated: {new Date(fingertipData.timestamp).toLocaleTimeString()}</div>
+                        <div className="text-gray-300">Hand: {handVisible ? 'Visible' : 'Not visible'}</div>
+                        <div className="text-gray-300">Gripper: {gripperClosed ? 'Closed 🤏' : 'Open 🖐️'}</div>
+                        <div className="text-gray-300">Points detected: {Object.keys(trackingResult.fingertip_coords).length}</div>
                       </>
                     ) : (
                       <div className="text-gray-300">No hand detected</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* WebSocket Status */}
+                <div>
+                  <h3 className="font-medium mb-2 flex items-center gap-2 text-white">
+                    <Activity className="h-4 w-4" />
+                    WebSocket Status
+                  </h3>
+                  <div className="text-xs text-gray-300 space-y-1">
+                    <div className={`font-medium ${wsConnected ? 'text-green-400' : 'text-red-400'}`}>
+                      {isTracking ? (wsConnected ? '🟢 Connected' : '🔴 Disconnected') : '⚪ Not started'}
+                    </div>
+                    <div className="text-gray-300">
+                      URL: {API_BASE.replace('https:', 'wss:')}/api/tracking/live
+                    </div>
+                    {wsError && (
+                      <div className="text-red-400 bg-red-900/20 p-2 rounded text-xs">
+                        Error: {wsError}
+                      </div>
+                    )}
+                    {isTracking && !wsConnected && (
+                      <div className="text-yellow-400 text-xs">
+                        Tip: Check if backend is running and WebSocket endpoint is available
+                      </div>
                     )}
                   </div>
                 </div>
