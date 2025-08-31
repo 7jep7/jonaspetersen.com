@@ -116,7 +116,7 @@ export const loader = async () => {
   return json({});
 };
 
-const API_BASE = "https://human2robot-production.up.railway.app";
+const API_BASE = "https://hand-teleop-api.onrender.com";
 
 const ROBOTS = [
   { id: 'ur5e', name: 'UR5e', dof: 6, description: 'Universal Robots collaborative arm for precise manipulation' },
