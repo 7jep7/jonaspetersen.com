@@ -169,6 +169,7 @@ export default function HandTeleopProject() {
   const [gripperClosed, setGripperClosed] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsError, setWsError] = useState<string | null>(null);
+  const [testMode, setTestMode] = useState(false); // Add test mode for overlay testing
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const handTrackingApiRef = useRef<HandTrackingAPI | null>(null);
 
@@ -211,15 +212,18 @@ export default function HandTeleopProject() {
     try {
       const response = await fetch(`${API_BASE}/health`);
       if (response.ok) {
+        const data = await response.json();
         setApiStatus('connected');
-        addToConsole('Backend API connected successfully');
+        addToConsole(`✅ Backend API connected: ${data.message || 'Health check passed'}`);
       } else {
         setApiStatus('error');
-        addToConsole('Backend API returned error status');
+        addToConsole(`❌ Backend API error: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       setApiStatus('error');
-      addToConsole('Backend API connection failed');
+      addToConsole(`❌ Backend API connection failed: ${error}`);
+      // Note: CORS errors are expected for some endpoints, WebSocket connection is what matters most
+      console.warn('Health check failed, but WebSocket may still work:', error);
     }
   };
 
@@ -274,8 +278,11 @@ export default function HandTeleopProject() {
       };
       
       handTrackingApiRef.current.onTrackingResult = (result: HandTrackingResult) => {
+        console.log('Received tracking result:', result); // Debug log
         setTrackingResult(result);
         setHandVisible(!!result?.fingertip_coords);
+        addToConsole(`📍 Tracking data received: ${result?.fingertip_coords ? 'Hand detected' : 'No hand'}`);
+        
         // Gripper closed if thumb and index tip are close
         if (result?.fingertip_coords) {
           const thumb = result.fingertip_coords.thumb;
@@ -286,6 +293,7 @@ export default function HandTeleopProject() {
               Math.pow(thumb.y - indexTip.y, 2)
             );
             setGripperClosed(dist < 30); // threshold px
+            addToConsole(`🤏 Gripper state: ${dist < 30 ? 'Closed' : 'Open'} (distance: ${dist.toFixed(1)}px)`);
           } else {
             setGripperClosed(false);
           }
@@ -395,62 +403,132 @@ export default function HandTeleopProject() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Send frame to backend
     handTrackingApiRef.current.sendFrame(canvas);
+    
+    // Debug log every 30 frames (roughly once per second at 30fps)
+    if (animationRef.current && animationRef.current % 30 === 0) {
+      addToConsole(`📹 Sending video frame ${Math.floor(animationRef.current / 30)} to backend`);
+    }
+    
     animationRef.current = requestAnimationFrame(sendFramesLoop);
   };
 
   // Draw overlay points on second canvas
   useEffect(() => {
-    if (!trackingResult || !overlayCanvasRef.current || !videoRef.current) return;
+    if (!overlayCanvasRef.current || !videoRef.current || !isCameraActive) return;
     
     const canvas = overlayCanvasRef.current;
     const video = videoRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Draw video frame
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Set canvas size to match video
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
     
-    // Draw points
-    if (trackingResult.fingertip_coords) {
-      const { thumb, index_tip, index_pip, base_joint } = trackingResult.fingertip_coords;
-      ctx.fillStyle = 'rgba(255, 165, 0, 0.8)';
-      if (thumb) {
-        ctx.beginPath();
-        ctx.arc(thumb.x, thumb.y, 8, 0, 2 * Math.PI);
-        ctx.fill();
+    const drawFrame = () => {
+      if (!isCameraActive || !video || !ctx) return;
+      
+      // Always draw the video frame first
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Debug: Log canvas state occasionally
+      if (Math.random() < 0.01) { // Log 1% of frames
+        console.log('Drawing overlay frame:', {
+          canvasSize: `${canvas.width}x${canvas.height}`,
+          isCameraActive,
+          isTracking,
+          hasTrackingResult: !!trackingResult,
+          videoReady: video.readyState >= 2
+        });
       }
-      if (index_tip) {
-        ctx.beginPath();
-        ctx.arc(index_tip.x, index_tip.y, 8, 0, 2 * Math.PI);
-        ctx.fill();
+      
+      // Draw tracking points if available
+      if (trackingResult?.fingertip_coords) {
+        const { thumb, index_tip, index_pip, base_joint } = trackingResult.fingertip_coords;
+        
+        // Draw tracking points - subtle orange circles
+        ctx.fillStyle = 'rgba(255, 165, 0, 0.7)';
+        ctx.strokeStyle = 'rgba(255, 165, 0, 0.9)';
+        ctx.lineWidth = 2;
+        
+        // Draw points with labels
+        const points = [
+          { coords: thumb, label: 'T', color: 'rgba(255, 100, 100, 0.8)' },
+          { coords: index_tip, label: 'I', color: 'rgba(100, 255, 100, 0.8)' },
+          { coords: index_pip, label: 'M', color: 'rgba(100, 100, 255, 0.8)' },
+          { coords: base_joint, label: 'B', color: 'rgba(255, 255, 100, 0.8)' }
+        ];
+        
+        points.forEach(point => {
+          if (point.coords) {
+            // Draw colored circle for each point
+            ctx.fillStyle = point.color;
+            ctx.strokeStyle = point.color;
+            ctx.beginPath();
+            ctx.arc(point.coords.x, point.coords.y, 6, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Draw subtle label
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(point.label, point.coords.x, point.coords.y - 10);
+          }
+        });
       }
-      if (index_pip) {
-        ctx.beginPath();
-        ctx.arc(index_pip.x, index_pip.y, 8, 0, 2 * Math.PI);
-        ctx.fill();
+      
+      // Draw status icons - subtle at bottom of video (always show when camera is active)
+      const bottomY = canvas.height - 30; // Position near bottom
+      ctx.textAlign = 'center';
+      ctx.font = '20px sans-serif'; // Make icons bigger and more visible
+      
+      // Add subtle dark background for better visibility
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(canvas.width / 2 - 30, bottomY - 25, 60, 35);
+      
+      // Add white border for visibility
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(canvas.width / 2 - 30, bottomY - 25, 60, 35);
+      
+      if (isTracking && trackingResult?.fingertip_coords && handVisible) {
+        // Hand detected - show gripper state
+        ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+        ctx.fillText(gripperClosed ? '🤏' : '✋', canvas.width / 2, bottomY);
+      } else if (isTracking) {
+        // Tracking active but no hand detected
+        ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+        ctx.fillText('🚫', canvas.width / 2, bottomY);
+      } else {
+        // Camera active but tracking not started
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.fillText('⏸️', canvas.width / 2, bottomY);
       }
-      if (base_joint) {
-        ctx.beginPath();
-        ctx.arc(base_joint.x, base_joint.y, 8, 0, 2 * Math.PI);
-        ctx.fill();
+      
+      // Debug: Draw a test indicator in top-left to confirm overlay is working
+      ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+      ctx.fillRect(10, 10, 20, 20);
+      ctx.fillStyle = 'white';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('OVERLAY', 35, 25);
+      
+      // Continue the animation loop when camera is active (always show icons)
+      if (isCameraActive) {
+        requestAnimationFrame(drawFrame);
       }
-    }
+    };
     
-    // Draw hand/gripper status icons
-    if (handVisible) {
-      ctx.font = '24px sans-serif';
-      ctx.fillStyle = gripperClosed ? 'rgba(0,200,0,0.8)' : 'rgba(255,255,255,0.8)';
-      ctx.fillText(gripperClosed ? '🤏' : '🖐️', 30, 40);
-    } else {
-      ctx.font = '24px sans-serif';
-      ctx.fillStyle = 'rgba(200,0,0,0.8)';
-      ctx.fillText('🚫', 30, 40);
+    // Start the drawing loop when camera is active
+    if (isCameraActive) {
+      drawFrame();
     }
-  }, [trackingResult, handVisible, gripperClosed]);
+  }, [trackingResult, handVisible, gripperClosed, isTracking, isCameraActive]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -785,6 +863,36 @@ export default function HandTeleopProject() {
                         Tip: Check if backend is running and WebSocket endpoint is available
                       </div>
                     )}
+                    <div className="mt-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          // Test overlay with fake data
+                          const testData: HandTrackingResult = {
+                            fingertip_coords: {
+                              thumb: { x: 200, y: 200 },
+                              index_tip: { x: 250, y: 180 },
+                              index_pip: { x: 240, y: 220 },
+                              base_joint: { x: 180, y: 250 }
+                            }
+                          };
+                          setTrackingResult(testData);
+                          setHandVisible(true);
+                          setGripperClosed(Math.random() > 0.5);
+                          addToConsole('🧪 Test overlay data applied');
+                          setTimeout(() => {
+                            setTrackingResult(null);
+                            setHandVisible(false);
+                            setGripperClosed(false);
+                            addToConsole('🧪 Test overlay cleared');
+                          }, 3000);
+                        }}
+                        className="text-gray-300 border-gray-600 hover:border-orange-500 hover:text-orange-500"
+                      >
+                        Test Overlay
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -805,15 +913,20 @@ export default function HandTeleopProject() {
                 <div>
                   <h3 className="font-medium mb-2 flex items-center gap-2 text-white">
                     <Zap className="h-4 w-4" />
-                    API Status
+                    HTTP API Status
                   </h3>
                   <div className={`text-sm font-medium mb-2 ${
                     apiStatus === "connected" ? "text-green-400" : 
-                    apiStatus === "error" ? "text-red-400" : "text-yellow-400"
+                    apiStatus === "error" ? "text-yellow-400" : "text-yellow-400"
                   }`}>
                     {apiStatus === "connected" ? "✅ Connected" :
-                     apiStatus === "error" ? "❌ Error" : "⏳ Checking..."}
+                     apiStatus === "error" ? "⚠️ Health check failed" : "⏳ Checking..."}
                   </div>
+                  {apiStatus === "error" && (
+                    <div className="text-xs text-gray-400 mb-2">
+                      Note: WebSocket connection is what matters for hand tracking
+                    </div>
+                  )}
                   <Button 
                     size="sm" 
                     variant="outline" 
