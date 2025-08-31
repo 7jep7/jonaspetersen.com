@@ -20,16 +20,16 @@ import type { MetaFunction } from "@remix-run/node";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Jonas Petersen - AI Engineer & Robotics Researcher" },
-    { name: "description", content: "Computational engineer with AI/robotics expertise. Co-founded and scaled AI startup to €500k revenue. Cambridge MPhil, Imperial MEng. Building the future of human-robot interaction." },
-    { name: "keywords", content: "AI, Robotics, Machine Learning, Reinforcement Learning, Engineer, Startup Founder" },
-    { property: "og:title", content: "Jonas Petersen - AI Engineer & Robotics Researcher" },
-    { property: "og:description", content: "Computational engineer with AI/robotics expertise. Co-founded and scaled AI startup to €500k revenue. Cambridge MPhil, Imperial MEng. Building the future of human-robot interaction." },
+    { title: "Marcel Mordarski - Quantum Computing, AI & Nanotechnology" },
+    { name: "description", content: "Interdisciplinary scientist, entrepreneur, and public speaker based in Cupertino, CA. USRA Scholar at RIACS/NASA Ames, specializing in quantum computing, AI, and nanotechnology." },
+    { name: "keywords", content: "Quantum Computing, AI, Nanotechnology, NASA, USRA, Research, Innovation, Climate, Public Speaker" },
+    { property: "og:title", content: "Marcel Mordarski - Quantum Computing, AI & Nanotechnology" },
+    { property: "og:description", content: "Interdisciplinary scientist, entrepreneur, and public speaker based in Cupertino, CA. USRA Scholar at RIACS/NASA Ames, specializing in quantum computing, AI, and nanotechnology." },
     { property: "og:type", content: "website" },
-    { property: "og:url", content: "https://jonaspetersen.com" },
+    { property: "og:url", content: "https://marcelmordarski.com" },
     { name: "twitter:card", content: "summary_large_image" },
-    { name: "twitter:title", content: "Jonas Petersen - AI Engineer & Robotics Researcher" },
-    { name: "twitter:description", content: "Computational engineer with AI/robotics expertise. Co-founded and scaled AI startup to €500k revenue. Cambridge MPhil, Imperial MEng. Building the future of human-robot interaction." },
+    { name: "twitter:title", content: "Marcel Mordarski - Quantum Computing, AI & Nanotechnology" },
+    { name: "twitter:description", content: "Interdisciplinary scientist, entrepreneur, and public speaker based in Cupertino, CA. USRA Scholar at RIACS/NASA Ames, specializing in quantum computing, AI, and nanotechnology." },
   ];
 };
 
@@ -107,410 +107,215 @@ const projects: Project[] = [
   }
 ];
 
+
 export default function Home() {
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrolled = window.scrollY > 20;
-      setIsScrolled(scrolled);
-    };
-
-    // Check initial scroll position
-    handleScroll();
-    
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const handleDownloadCV = () => {
-    // Create a link to download the CV
-    const link = document.createElement('a');
-    link.href = '/cv.pdf';
-    link.download = 'Jonas_Petersen_CV.pdf';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleDownloadPresentation = () => {
-    // Create a link to download the exoskeleton presentation
-    const link = document.createElement('a');
-    link.href = '/exoskeleton-presentation.pdf';
-    link.download = 'Exoskeleton_Presentation_Jonas_Petersen.pdf';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
+  // Theme toggle and scroll state can be added here if needed
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-800 text-white">
       {/* Header */}
-      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out border-b ${
-        isScrolled 
-          ? 'bg-gray-900/60 backdrop-blur-2xl border-gray-600/20 shadow-xl shadow-black/10' 
-          : 'bg-gray-800/70 backdrop-blur-md border-gray-700/50'
-      }`}>
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gray-950/80 backdrop-blur-xl border-b border-gray-700 shadow-lg">
         <div className="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">JP</span>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 via-fuchsia-500 to-cyan-400 flex items-center justify-center">
+              <span className="text-white font-bold text-lg">MM</span>
             </div>
+            <span className="font-semibold text-lg tracking-tight text-white">Marcel Mordarski</span>
           </div>
-          <Button 
-            onClick={handleDownloadCV}
-            variant="outline" 
-            size="sm"
-            className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Download CV
-          </Button>
+          <div className="flex gap-2">
+            <a href="https://www.linkedin.com/in/marcelmordarski" target="_blank" rel="noopener noreferrer">
+              <Linkedin className="w-6 h-6 text-gray-300 hover:text-blue-400 transition" />
+            </a>
+            <a href="https://twitter.com/marcelmordarski" target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="w-6 h-6 text-gray-300 hover:text-blue-400 transition" />
+            </a>
+            <a href="mailto:marcel@email.com" target="_blank" rel="noopener noreferrer">
+              <Button size="sm" variant="outline" className="border-gray-600 text-gray-300 hover:border-blue-400 hover:text-blue-400">Email</Button>
+            </a>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="pt-24">
+      <main className="pt-28">
         {/* Hero Section */}
         <section className="max-w-4xl mx-auto px-6 py-16">
-          <div className="grid md:grid-cols-12 gap-8 mb-8">
-            {/* Profile Photo */}
+          <div className="grid md:grid-cols-12 gap-8 mb-8 items-center">
+            {/* Profile Visual */}
             <div className="md:col-span-4 flex flex-col items-center md:items-start">
               <div className="relative mb-6">
-                <div className="w-48 h-48 rounded-full p-0.5 bg-white">
-                  <img 
-                  src="/LinkedIn profile pic - shirt.png" 
-                  alt="Jonas Petersen" 
-                  className="w-full h-full rounded-full object-cover"
-                  />
+                <div className="w-44 h-44 rounded-full bg-gradient-to-tr from-blue-500 via-fuchsia-500 to-cyan-400 flex items-center justify-center">
+                  {/* Quantum/AI SVG visual placeholder */}
+                  <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="60" cy="60" r="54" stroke="white" strokeWidth="2" opacity="0.2" />
+                    <circle cx="60" cy="60" r="40" stroke="#38bdf8" strokeWidth="2" opacity="0.5" />
+                    <circle cx="60" cy="60" r="28" stroke="#a21caf" strokeWidth="2" opacity="0.7" />
+                    <circle cx="60" cy="60" r="16" stroke="#06b6d4" strokeWidth="2" opacity="0.9" />
+                    <circle cx="60" cy="60" r="4" fill="#fff" />
+                  </svg>
                 </div>
               </div>
-              <div className="flex justify-center space-x-6 md:mt-auto">
-                <a 
-                  href="https://github.com/7jep7" 
-                  className="flex items-center space-x-2 text-gray-400 hover:text-orange-500 transition-colors duration-200"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Github className="w-5 h-5" />
-                  <span className="text-sm font-medium">GitHub</span>
-                </a>
-                <a 
-                  href="https://linkedin.com/in/jep7" 
-                  className="flex items-center space-x-2 text-gray-400 hover:text-orange-500 transition-colors duration-200"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Linkedin className="w-5 h-5" />
-                  <span className="text-sm font-medium">LinkedIn</span>
-                </a>
-              </div>
             </div>
-            
-            {/* Text Content */}
+            {/* Hero Text */}
             <div className="md:col-span-8 text-center md:text-left flex flex-col">
-              <h1 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight bg-gradient-to-r from-white via-orange-400 to-orange-600 bg-clip-text text-transparent">
-                Hi, I'm Jonas
+              <h1 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight bg-gradient-to-r from-white via-blue-400 to-fuchsia-500 bg-clip-text text-transparent">
+                Marcel Mordarski
               </h1>
-                <p className="text-xl md:text-2xl text-gray-300 leading-relaxed mb-8 md:mb-0">
-                  Computational engineer with AI and robotics expertise.
-                  Co-founder who scaled a startup to €500k revenue.
-                  Educated at Imperial College and Cambridge University.&nbsp;
-                    Building the data pipelines for shipping{" "}
-                    <span className="bg-orange-400 rounded px-1 font-bold" style={{ lineHeight: "1.5", paddingTop: "0.1em", paddingBottom: "0.1em" }}>
-                      true robotic intelligence
-                    </span>
-                    .
-                </p>
+              <p className="text-xl md:text-2xl text-gray-300 leading-relaxed mb-4">
+                Interdisciplinary scientist, entrepreneur, and public speaker based in Cupertino, CA. USRA Scholar at RIACS/NASA Ames, specializing in quantum computing, AI, and nanotechnology.
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center md:justify-start mb-2">
+                <Badge className="bg-blue-600 text-white">Quantum Computing</Badge>
+                <Badge className="bg-fuchsia-600 text-white">AI</Badge>
+                <Badge className="bg-cyan-600 text-white">Nanotechnology</Badge>
+                <Badge className="bg-gray-700 text-white">Public Speaker</Badge>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                <Badge className="bg-gray-800 text-blue-300">USRA Scholar, NASA Ames</Badge>
+                <Badge className="bg-gray-800 text-fuchsia-300">Entrepreneur</Badge>
+              </div>
             </div>
           </div>
         </section>
 
         {/* About Section */}
-        <section className="max-w-4xl mx-auto px-6 pb-16">
-          <div>
-            <Card className="bg-gray-800 border-gray-700 p-8">
-              <h2 className="text-3xl font-bold text-white mb-6">About Me</h2>
-                            <div className="space-y-4 text-gray-300 leading-relaxed">
-                <p>
-                  I'm a German engineer and founder drawn to <strong>embodied AI</strong>, where robots learn to move and think like humans. 
-                  My work spans from <strong>creating advanced robotics systems</strong> to innovative AI solutions that solve real-world problems.
-                </p>
-                <p>
-                  With a background in <strong>mechanical engineering and computing</strong>, I've led projects ranging from biomechanical 
-                  exoskeletons to <strong>reinforcement learning training data pipelines</strong>. I co-founded and scaled a tech startup to 
-                    {" "}<strong>€500k in revenues</strong>, less than 12 months out of uni.
-                </p>
-                <p>
-                  To me, solving embodied AI is the most challenging and enticing problem of our time.
-                  Humanity is on track to be <strong>100M workers short by 2030</strong> alone due to our post-modern ageing society. 
-                  Embodied AI can fix this. And I would like my future family to live a life as beautiful and better than 
-                  what I am so grateful for living today. Extremely excited to be alive right now and make a dent!
-                </p>
-              </div>
-            </Card>
-          </div>
-        </section>
-
-        {/* Simple Projects Section */}
-        <section className="max-w-4xl mx-auto px-6 pb-16">
-          <h2 className="text-3xl font-bold text-white mb-12 text-center">Projects</h2>
-          
-          <div className="space-y-8">
-            {/* human2robot - Featured */}
-            <Card className="bg-gray-800 border-gray-700 p-8 relative">
-              <div className="absolute -top-3 left-8">
-                <Badge className="bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide">
-                  <Star className="w-3 h-3 mr-1" />
-                  Featured
-                </Badge>
-              </div>
-              <div className="mb-6">
-                <h3 className="text-2xl font-bold text-white mb-3">human2robot</h3>
-                <p className="text-white leading-relaxed mb-4">
-                  Coordination and data layer for the robotic age. Training data platform using imitation learning from human hand video recordings.&nbsp;
-                  <a
-                  href="https://www.linkedin.com/posts/jep7_rl-imitation-learning-activity-7345208378501062657-ga36?utm_source=share&utm_medium=member_desktop&rcm=ACoAACBDePQBszetOjFm1YJUCXql69BtJb6OTaY"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-white underline hover:text-orange-500"
-                  >
-                  Won 2 hackathons
-                  </a>
-                  &nbsp;and secured YC interview.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2 mb-6">
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Python</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">ROS</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Imitation Learning</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Isaac Gym</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">SO-101 Manipulator</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Computer Vision</Badge>
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  asChild
-                  variant="default"
-                  size="sm"
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
-                >
-                  <Link to="/projects/hand-teleop">
-                    <Play className="w-4 h-4 mr-2" />
-                    Live Demo
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://github.com/7jep7/human2robot', '_blank')}
-                  className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                >
-                  <Github className="w-4 h-4 mr-2" />
-                  GitHub
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://www.l5e.xyz', '_blank')}
-                  className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Website
-                </Button>
-              </div>
-            </Card>
-
-            {/* K2 AI */}
-            <Card className="bg-gray-800 border-gray-700 p-8">
-              <div className="mb-6">
-                <h3 className="text-2xl font-bold text-white mb-3">K2 AI</h3>
-                <p className="text-gray-300 leading-relaxed mb-4">
-                  Co-founded AI startup, scaled to 10 employees and &gt;€500k revenue. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2 mb-6">
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">SLMs</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Enterprise Sales</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Leadership</Badge>
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://www.linkedin.com/company/100340844', '_blank')}
-                  className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                >
-                  <Linkedin className="w-4 h-4 mr-2" />
-                  LinkedIn
-                </Button>
-              </div>
-            </Card>
-
-            {/* Small Projects Grid */}
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* RL Projects */}
-              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">RL Projects</h3>
-                    <p className="text-white leading-relaxed mb-4">
-                      This repository showcases my reinforcement learning expertise through projects like CartPole DQN, MuJoCo PPO/SAC, an Othello RL agent, and a Tesla Optimus-inspired robotic system, earning{" "}
-                      <a 
-                        href="https://roboinnovate.mirmi.tum.de/roboinnovate-hackathon-2025/" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="text-white underline hover:text-orange-500"
-                      >
-                        2nd place with ExVo at Robo Innovate 2025
-                      </a>
-                      , Germany's largest robotics hackathon.
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">PyTorch</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Reinforcement Learning</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">OpenAI Gym</Badge>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://github.com/7jep7/RL-Projects', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <Github className="w-4 h-4 mr-2" />
-                    GitHub
-                  </Button>
-                </div>
-              </Card>
-
-              {/* Wildfire Suppression Model */}
-              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">Wildfire Suppression Model</h3>
-                  <p className="text-gray-300 leading-relaxed mb-4">
-                    Master thesis project developing MDP wildfire model with Monte-Carlo Tree Search optimization. Published first-author paper in Combustion Science & Technology.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">MCTS</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">MDP</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Optimization</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Research</Badge>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://drive.google.com/file/d/1XPphLHcbn0c3HYzP-rjMFvPR8HTJrSiZ/view?usp=drive_link', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Paper
-                  </Button>
-                </div>
-              </Card>
-
-              {/* Biomechanical Exoskeleton */}
-              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">Biomechanical Exoskeleton</h3>
-                  <p className="text-gray-300 leading-relaxed mb-4">
-                    Gravity-compensating shoulder exoskeleton for Long-COVID patients. Built with Arduino Mega, PID control, and conducted user testing.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Arduino</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">PID Control</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Biomechanics</Badge>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDownloadPresentation}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Presentation
-                  </Button>
-                </div>
-              </Card>
-
-              {/* Photos from Stratosphere */}
-              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">Photos from Stratosphere</h3>
-                  <p className="text-gray-300 leading-relaxed mb-4">
-                    High-altitude photography project capturing stunning images from the stratosphere using weather balloons and custom camera systems. Engineering challenge combining electronics, atmospheric physics, and photography.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Electronics</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Fundraising</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Atmospheric Physics</Badge>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://www.youtube.com/watch?v=IPa6hRWRHTM', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <Youtube className="w-4 h-4 mr-2" />
-                    Video
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://www.kickstarter.com/projects/gordonkoehn/caelum-photos-from-stratosphere', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Kickstarter
-                  </Button>
-                </div>
-              </Card>
+        <section className="max-w-4xl mx-auto px-6 pb-12">
+          <Card className="bg-gray-900 border-gray-800 p-8">
+            <h2 className="text-3xl font-bold text-white mb-6">About Marcel</h2>
+            <div className="space-y-4 text-gray-300 leading-relaxed">
+              <p>
+                Interdisciplinary scientist, entrepreneur, and public speaker based in Cupertino, CA. USRA Scholar at RIACS/NASA Ames, specializing in quantum computing, AI, and nanotechnology. Passionate about innovation, climate change solutions, and advancing quantum technologies.
+              </p>
+              <p>
+                Enjoys cycling, handball, skiing, Gombrowicz books, Dalí art, and debating.
+              </p>
             </div>
+          </Card>
+        </section>
+
+        {/* Key Roles Section */}
+        <section className="max-w-4xl mx-auto px-6 pb-12">
+          <h2 className="text-3xl font-bold text-white mb-6">Key Roles</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-xl font-semibold text-blue-400 mb-1">USRA Scholar, RIACS/NASA Ames</h3>
+              <p className="text-gray-300 text-sm mb-1">May 2025–Present</p>
+              <p className="text-gray-400 text-sm">Researching optimization, benchmarking, and quantum algorithms with Ising machines.</p>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-xl font-semibold text-fuchsia-400 mb-1">Cryptographer, Quantinuum Internship</h3>
+              <p className="text-gray-300 text-sm mb-1">Mar 2024–Jan 2025</p>
+              <p className="text-gray-400 text-sm">Worked on quantum position verification, bit commitment, and quantum money.</p>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-xl font-semibold text-cyan-400 mb-1">Policy Expert, Polish Chamber of Commerce</h3>
+              <p className="text-gray-300 text-sm mb-1">Jun 2024–Present</p>
+              <p className="text-gray-400 text-sm">Advising on Quantum Technologies Committee for governmental digitization strategy.</p>
+            </Card>
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="max-w-4xl mx-auto px-6 py-16 text-center">
-          <div className="border-t border-gray-700 pt-12">
-            <p className="text-gray-300 mb-6">Let's connect and build something amazing together</p>
-            <div className="flex justify-center space-x-6 mb-8">
-              <a 
-                href="https://linkedin.com/in/jep7" 
-                className="flex items-center space-x-2 text-gray-300 hover:text-orange-500 transition-colors duration-200"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+        {/* Education Section */}
+        <section className="max-w-4xl mx-auto px-6 pb-12">
+          <h2 className="text-3xl font-bold text-white mb-6">Education</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-xl font-semibold text-blue-400 mb-1">University of Cambridge</h3>
+              <p className="text-gray-300 text-sm mb-1">MPhil in Micro and Nanotechnology Enterprise (2022–2023)</p>
+              <p className="text-gray-400 text-sm">Distinction, 86%; Dissertation: 91.5%</p>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-xl font-semibold text-fuchsia-400 mb-1">UCL</h3>
+              <p className="text-gray-300 text-sm mb-1">BSc in Natural Sciences (Physics + Chemistry) (2019–2022)</p>
+              <p className="text-gray-400 text-sm">1st Class Honours</p>
+            </Card>
+          </div>
+        </section>
+
+        {/* Achievements Section */}
+        <section className="max-w-4xl mx-auto px-6 pb-12">
+          <h2 className="text-3xl font-bold text-white mb-6">Key Achievements</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-blue-400 mb-1">Feynman Quantum Academy Scholarship (2025, USRA-NASA QuAIL)</h3>
+              <p className="text-gray-400 text-sm">Research in quantum information sciences.</p>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-fuchsia-400 mb-1">Winner, Generation Freedom Competition (2023)</h3>
+              <p className="text-gray-400 text-sm">Innovation for freedom challenge.</p>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-cyan-400 mb-1">Winner, SchneiderGoGreen UK (2021)</h3>
+              <p className="text-gray-400 text-sm">Business mindset for climate change solutions.</p>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-blue-400 mb-1">Finalist, Bright SCIdea Challenge (2020)</h3>
+              <p className="text-gray-400 text-sm">Start-up innovation.</p>
+            </Card>
+          </div>
+        </section>
+
+        {/* Research & Projects Section */}
+        <section className="max-w-4xl mx-auto px-6 pb-12">
+          <h2 className="text-3xl font-bold text-white mb-6">Research & Projects</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-blue-400 mb-1">Spin-qubit Transistors (2023, Hitachi)</h3>
+              <p className="text-gray-400 text-sm">Simulated Ge-heterostructure qubit systems, advancing quantum computing scalability.</p>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-fuchsia-400 mb-1">Spin Glass Physics (2021–2022, UCL)</h3>
+              <p className="text-gray-400 text-sm">Applied spin glass models to neuroscience, biology, and economics, exploring quantum neural networks.</p>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-cyan-400 mb-1">Publications</h3>
+              <p className="text-gray-400 text-sm">Proposed AI-based alternatives to peer review (St Gallen Symposium, 2023) and reviewed spin glass applications (Society for Natural Sciences, 2023).</p>
+            </Card>
+          </div>
+        </section>
+
+        {/* Events & Speaking Section */}
+        <section className="max-w-4xl mx-auto px-6 pb-12">
+          <h2 className="text-3xl font-bold text-white mb-6">Events & Speaking</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-blue-400 mb-1">Speaker at 2022 NatSci Soc (Nottingham), TEDxBloomsbury, and European Commission diplomacy course</h3>
+              <p className="text-gray-400 text-sm">2022–2025</p>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800 p-6">
+              <h3 className="text-lg font-semibold text-fuchsia-400 mb-1">Participant in Y Combinator AI Startup School (2025)</h3>
+              <p className="text-gray-400 text-sm">Dynamic events calendar coming soon.</p>
+            </Card>
+          </div>
+        </section>
+
+        {/* Business & Innovation Section */}
+        <section className="max-w-4xl mx-auto px-6 pb-12">
+          <h2 className="text-3xl font-bold text-white mb-6">Business & Innovation</h2>
+          <Card className="bg-gray-900 border-gray-800 p-6">
+            <p className="text-gray-300">Involved in start-ups and R&D, focusing on quantum computing and AI-driven climate solutions. Advocate for interdisciplinary science and disruptive innovation.</p>
+          </Card>
+        </section>
+
+        {/* Contact Section */}
+        <section className="max-w-4xl mx-auto px-6 pb-20">
+          <h2 className="text-3xl font-bold text-white mb-6">Contact</h2>
+          <Card className="bg-gray-900 border-gray-800 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex gap-4 items-center">
+              <a href="https://www.linkedin.com/in/marcelmordarski" target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-gray-300 hover:text-blue-400 transition-colors duration-200">
                 <Linkedin className="w-5 h-5" />
                 <span className="font-medium">LinkedIn</span>
               </a>
-              <a 
-                href="https://github.com/7jep7" 
-                className="flex items-center space-x-2 text-gray-300 hover:text-orange-500 transition-colors duration-200"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Github className="w-5 h-5" />
-                <span className="font-medium">GitHub</span>
+              <a href="https://twitter.com/marcelmordarski" target="_blank" rel="noopener noreferrer" className="flex items-center space-x-2 text-gray-300 hover:text-blue-400 transition-colors duration-200">
+                <ExternalLink className="w-5 h-5" />
+                <span className="font-medium">Twitter</span>
               </a>
-              <a 
-                href="https://instagram.com/7jep7" 
-                className="flex items-center space-x-2 text-gray-300 hover:text-orange-500 transition-colors duration-200"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Instagram className="w-5 h-5" />
-                <span className="font-medium">Instagram</span>
+              <a href="mailto:marcel@email.com" className="flex items-center space-x-2 text-gray-300 hover:text-blue-400 transition-colors duration-200">
+                <Button size="sm" variant="outline" className="border-gray-600 text-gray-300 hover:border-blue-400 hover:text-blue-400">Email</Button>
               </a>
             </div>
-            <p className="text-gray-400 text-sm">© 2025 Jonas Petersen.</p>
-          </div>
-        </footer>
+            <span className="text-gray-400 text-sm">© 2025 Marcel Mordarski.</span>
+          </Card>
+        </section>
       </main>
     </div>
   );
