@@ -232,10 +232,6 @@ export const loader = async () => {
 // Configuration for different environments
 const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 
-// Try local first in development, fallback to remote
-const API_BASE = isDevelopment ? "http://localhost:8000" : "https://hand-teleop-api.onrender.com";
-const WS_BASE = isDevelopment ? "ws://localhost:8000" : "wss://hand-teleop-api.onrender.com";
-
 // Connection timeout settings
 const CONNECTION_TIMEOUT = 10000; // 10 seconds
 const HEALTH_CHECK_TIMEOUT = 5000; // 5 seconds
@@ -282,8 +278,17 @@ export default function HandTeleopProject() {
   const [isTracking, setIsTracking] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [apiStatus, setApiStatus] = useState('checking');
+  const [useOnlineServer, setUseOnlineServer] = useState(false);
   // Output console state
   const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
+
+  // Dynamic API URLs based on server selection
+  const API_BASE = useOnlineServer 
+    ? "https://hand-teleop-api.onrender.com" 
+    : (isDevelopment ? "http://localhost:8000" : "https://hand-teleop-api.onrender.com");
+  const WS_BASE = useOnlineServer 
+    ? "wss://hand-teleop-api.onrender.com" 
+    : (isDevelopment ? "ws://localhost:8000" : "wss://hand-teleop-api.onrender.com");
 
   // Data state - Updated for real backend integration
   const [trackingResult, setTrackingResult] = useState<BackendTrackingResult | null>(null);
@@ -329,15 +334,32 @@ export default function HandTeleopProject() {
     setConsoleLogs(prev => [`[${timestamp}] ${message}`, ...prev].slice(0, 50)); // Keep last 50 logs
   };
 
-  // Check API status on mount
+  // Check API status on mount and when server selection changes
   useEffect(() => {
     checkApiStatus();
-  }, []);
+  }, [useOnlineServer]);
+
+  // Auto-detect best server on mount (development only)
+  useEffect(() => {
+    if (isDevelopment && apiStatus === 'idle') {
+      addToConsole('🔍 Auto-detecting best server for development...');
+      // Always start with local in development
+      setUseOnlineServer(false);
+    }
+  }, []); // Only run on mount
+
+  // Reconnect WebSocket when server selection changes
+  useEffect(() => {
+    if (isCameraActive) {
+      addToConsole('🔄 Server changed, reconnecting WebSocket...');
+      setupWebSocketConnection();
+    }
+  }, [useOnlineServer, isCameraActive]);
 
   const checkApiStatus = async () => {
     try {
       setApiStatus('checking');
-      addToConsole('🔍 Checking backend API health...');
+      addToConsole(`🔍 Checking backend API health at ${API_BASE}/health...`);
       
       // Add timeout for health check
       const controller = new AbortController();
@@ -364,10 +386,18 @@ export default function HandTeleopProject() {
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         setApiStatus('timeout');
-        addToConsole(`⏰ Backend API timeout (>${HEALTH_CHECK_TIMEOUT / 1000}s) - WebSocket may still work`);
+        addToConsole(`⏰ Backend API timeout (>${HEALTH_CHECK_TIMEOUT / 1000}s)`);
       } else {
         setApiStatus('error');
         addToConsole(`❌ Backend API connection failed: ${error}`);
+      }
+      
+      // Auto-fallback to online server if local server fails and not already using online
+      // But be less aggressive - only fallback if this is the first attempt and local clearly failed
+      if (!useOnlineServer && isDevelopment && apiStatus === 'error') {
+        addToConsole('⚠️ Local server health check failed - you can manually switch to online server if needed');
+        addToConsole('💡 Tip: WebSocket may still work even if health check fails');
+        // Don't auto-switch - let user decide
       }
       
       // Note: CORS errors or timeouts are expected for some deployments
@@ -395,8 +425,11 @@ export default function HandTeleopProject() {
         setWsConnected(connected);
         setWsConnecting(false);
         if (connected) {
-          addToConsole('✅ WebSocket connected - hand tracking ready');
+          addToConsole('✅ WebSocket connected - starting hand tracking automatically');
           setWsError(null);
+          // Auto-start tracking when WebSocket connects (camera is already active)
+          setIsTracking(true);
+          addToConsole('▶️ Hand tracking started automatically at 10 FPS');
         } else {
           addToConsole('❌ WebSocket disconnected');
           setIsTracking(false); // Stop tracking when WebSocket disconnects
@@ -442,9 +475,9 @@ export default function HandTeleopProject() {
         ` | Latency: ${result.latency_ms.toFixed(1)}ms` : '';
       addToConsole(`📍 Hand detected: thumb(${fingertips.thumb_tip.x.toFixed(3)}, ${fingertips.thumb_tip.y.toFixed(3)}) | Processing: ${result.processing_time_ms.toFixed(1)}ms${performanceInfo}`);
       
-      // Calculate gripper state
+      // Calculate gripper state - more sensitive detection
       const pinchDistance = handTrackingApiRef.current?.calculatePinchDistance(fingertips) || 1;
-      const isGripperClosed = pinchDistance < 0.05;
+      const isGripperClosed = pinchDistance < 0.08; // Increased from 0.05 for more sensitivity
       setGripperClosed(isGripperClosed);
       
       // Update legacy fingertip data for robot visualization
@@ -806,7 +839,7 @@ export default function HandTeleopProject() {
     // Draw thumb tip
     if (fingertips.thumb_tip) {
       const thumbPos = convertCoord(fingertips.thumb_tip);
-      ctx.fillStyle = isGripperClosed ? '#ff4444' : '#00ff00';
+      ctx.fillStyle = isGripperClosed ? '#ff8800' : '#10b981';
       ctx.strokeStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(thumbPos.x, thumbPos.y, radius, 0, 2 * Math.PI);
@@ -823,7 +856,7 @@ export default function HandTeleopProject() {
     // Draw index tip
     if (fingertips.index_tip) {
       const indexPos = convertCoord(fingertips.index_tip);
-      ctx.fillStyle = isGripperClosed ? '#ff4444' : '#00ff00';
+      ctx.fillStyle = isGripperClosed ? '#ff8800' : '#10b981';
       ctx.strokeStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(indexPos.x, indexPos.y, radius, 0, 2 * Math.PI);
@@ -1076,7 +1109,7 @@ export default function HandTeleopProject() {
                 
                 <Button 
                   onClick={isTracking ? stopTracking : startTracking}
-                  disabled={!isCameraActive || !wsConnected}
+                  disabled={!isCameraActive}
                   variant={isTracking ? "destructive" : "default"}
                   className={isTracking ? "bg-red-600 hover:bg-red-700" : ""}
                 >
@@ -1088,9 +1121,8 @@ export default function HandTeleopProject() {
                   ) : (
                     <>
                       <Play className="h-4 w-4 mr-2" />
-                      {!isCameraActive ? "Start Camera First" : 
-                       !wsConnected ? "Connect WebSocket First" : 
-                       "Start Tracking"}
+                      {!isCameraActive ? "Start Camera" : 
+                       wsConnected ? "Tracking Active" : "Connecting..."}
                     </>
                   )}
                 </Button>
@@ -1202,28 +1234,43 @@ export default function HandTeleopProject() {
                             />
                             {/* Status icons overlay - top left */}
                             {isCameraActive && wsConnected && (
-                              <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                                {/* Hand detection status - minimal circle indicator */}
+                              <div className="absolute top-3 left-3 flex items-center gap-3">
+                                {/* Hand detection status - hand icon */}
                                 <div 
-                                  className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                                    handVisible ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-gray-500'
+                                  className={`w-12 h-12 flex items-center justify-center transition-all duration-200 ${
+                                    handVisible ? 'text-emerald-500' : 'text-gray-500'
                                   }`}
                                   title={handVisible ? "Hand detected" : "No hand detected"}
-                                />
-                                {/* Gripper status - minimal square indicator */}
-                                <div 
-                                  className={`w-2 h-2 transition-all duration-200 ${
-                                    handVisible 
-                                      ? (gripperClosed ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-gray-400') 
-                                      : 'bg-gray-600'
-                                  }`}
-                                  style={{ borderRadius: '1px' }}
-                                  title={
-                                    handVisible 
-                                      ? (gripperClosed ? "Gripper closed" : "Gripper open") 
-                                      : "No hand detected"
-                                  }
-                                />
+                                >
+                                  <svg 
+                                    viewBox="0 0 24 24" 
+                                    className="w-8 h-8 fill-current"
+                                  >
+                                    <path d="M9,2C8.45,2 8,2.45 8,3V12C8,12.55 8.45,13 9,13C9.55,13 10,12.55 10,12V3C10,2.45 9.55,2 9,2M12,4C11.45,4 11,4.45 11,5V12C11,12.55 11.45,13 12,13C12.55,13 13,12.55 13,12V5C13,4.45 12.55,4 12,4M15,6C14.45,6 14,6.45 14,7V12C14,12.55 14.45,13 15,13C15.55,13 16,12.55 16,12V7C16,6.45 15.55,6 15,6M18,8C17.45,8 17,8.45 17,9V12C17,12.55 17.45,13 18,13C18.55,13 19,12.55 19,12V9C19,8.45 18.55,8 18,8M5,10C4.45,10 4,10.45 4,11V13C4,16.31 6.69,19 10,19H16C17.1,19 18,18.1 18,17V15H19C19.55,15 20,14.55 20,14V11C20,10.45 19.55,10 19,10H5Z"/>
+                                  </svg>
+                                </div>
+                                {/* Gripper status - lock icon (only show when hand is detected) */}
+                                {handVisible && (
+                                  <div 
+                                    className={`w-12 h-12 flex items-center justify-center transition-all duration-200 ${
+                                      gripperClosed ? 'text-orange-400' : 'text-emerald-500'
+                                    }`}
+                                    title={gripperClosed ? "Gripper closed" : "Gripper open"}
+                                  >
+                                    <svg 
+                                      viewBox="0 0 24 24" 
+                                      className="w-8 h-8 fill-current"
+                                    >
+                                      {gripperClosed ? (
+                                        // Closed lock icon
+                                        <path d="M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z"/>
+                                      ) : (
+                                        // Open lock icon
+                                        <path d="M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H15V6A3,3 0 0,0 12,3A3,3 0 0,0 9,6H7A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18Z"/>
+                                      )}
+                                    </svg>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </>
@@ -1239,8 +1286,8 @@ export default function HandTeleopProject() {
                           <div className="w-full h-full flex items-center justify-center text-gray-400">
                             <div className="text-center">
                               <Hand className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-                              <p className="text-blue-400">Ready to track</p>
-                              <p className="text-sm text-gray-400">Click "Start Tracking" to begin</p>
+                              <p className="text-blue-400">Starting tracking...</p>
+                              <p className="text-sm text-gray-400">Initializing hand detection</p>
                             </div>
                           </div>
                         ) : (
@@ -1311,6 +1358,36 @@ export default function HandTeleopProject() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Server Selection */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-white">Backend Server</label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setUseOnlineServer(false)}
+                      className={`px-3 py-2 rounded-lg text-xs transition-colors ${
+                        !useOnlineServer 
+                          ? 'bg-emerald-600 text-white' 
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Local (localhost:8000)
+                    </button>
+                    <button
+                      onClick={() => setUseOnlineServer(true)}
+                      className={`px-3 py-2 rounded-lg text-xs transition-colors ${
+                        useOnlineServer 
+                          ? 'bg-emerald-600 text-white' 
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Online (Render)
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Current: {useOnlineServer ? 'Online Server' : 'Local Server'}
+                  </p>
                 </div>
 
                 {/* Fingertip Data */}
