@@ -176,10 +176,10 @@ const ws = new WebSocket('wss://hand-teleop-api.onrender.com/api/tracking/live')
 
 1. **Start Backend:**
    ```bash
-   cd projects/hand-teleop-system
-   conda activate hand-teleop
-   python render_backend.py
-   # Backend running on http://localhost:8000
+   # Start from your separate hand-teleop-system repository
+   cd /path/to/your/hand-teleop-system
+   # Follow backend repo instructions to start server
+   # Backend should run on http://localhost:8000
    ```
 
 2. **Start Frontend:**
