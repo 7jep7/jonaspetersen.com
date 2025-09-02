@@ -87,10 +87,12 @@ class HandTrackingAPI {
         this.ws.onmessage = (event: MessageEvent) => {
           try {
             const response = JSON.parse(event.data);
+            console.log('📨 WebSocket message received:', response); // Debug log
             
             if (response.type === 'pong') {
               console.log('🏓 Pong received - server is responsive');
             } else if (response.type === 'tracking_result' && this.onTrackingResult) {
+              console.log('🎯 Tracking result data:', response.data); // Debug log
               // Calculate round-trip latency
               const now = Date.now();
               const latency = now - this.lastFrameTime;
@@ -128,6 +130,7 @@ class HandTrackingAPI {
         
         this.ws.onclose = (event: CloseEvent) => {
           console.log(`🔌 WebSocket closed: ${event.code} - ${event.reason || 'Unknown reason'}`);
+          console.log(`📊 Connection was open for: ${Date.now() - this.lastFrameTime}ms`);
           clearTimeout(connectionTimeout);
           this.isConnected = false;
           if (this.onConnectionChange) this.onConnectionChange(false);
@@ -171,6 +174,13 @@ class HandTrackingAPI {
           timestamp: new Date().toISOString(),
           client_timestamp: Date.now()
         };
+        
+        console.log('📤 Sending WebSocket message:', { 
+          type: message.type, 
+          data_length: imageData.length,
+          tracking_mode: message.tracking_mode,
+          robot_type: message.robot_type 
+        }); // Debug log (without full image data)
         
         this.ws.send(JSON.stringify(message));
         this.lastFrameTime = Date.now();
@@ -464,6 +474,7 @@ export default function HandTeleopProject() {
 
   // Handle tracking results from backend
   const handleTrackingResult = (result: BackendTrackingResult) => {
+    console.log('🎯 Processing tracking result:', result); // Debug log
     setTrackingResult(result);
     setHandVisible(result.hand_detected);
     setProcessingTime(result.processing_time_ms);
@@ -471,6 +482,7 @@ export default function HandTeleopProject() {
     // Update console with tracking info including performance metrics
     if (result.hand_detected && result.fingertip_coords) {
       const fingertips = result.fingertip_coords;
+      console.log('👆 Fingertip coordinates:', fingertips); // Debug log
       const performanceInfo = result.latency_ms ? 
         ` | Latency: ${result.latency_ms.toFixed(1)}ms` : '';
       addToConsole(`📍 Hand detected: thumb(${fingertips.thumb_tip.x.toFixed(3)}, ${fingertips.thumb_tip.y.toFixed(3)}) | Processing: ${result.processing_time_ms.toFixed(1)}ms${performanceInfo}`);
@@ -779,7 +791,16 @@ export default function HandTeleopProject() {
       // Log frame sending occasionally for debugging
       const now = Date.now();
       if (now - lastFrameTimeRef.current > 3000) { // Log every 3 seconds
-        addToConsole(`📹 ${success ? 'Sending' : 'Failed to send'} frames to backend (${selectedModel})`);
+        const streamInfo = streamRef.current ? {
+          active: streamRef.current.active,
+          tracks: streamRef.current.getTracks().map(track => ({
+            kind: track.kind,
+            enabled: track.enabled,
+            readyState: track.readyState
+          }))
+        } : null;
+        
+        addToConsole(`📹 ${success ? 'Sending' : 'Failed to send'} frames | Stream: ${JSON.stringify(streamInfo)}`);
         lastFrameTimeRef.current = now;
       }
     } catch (error) {
@@ -791,9 +812,27 @@ export default function HandTeleopProject() {
   // Start/stop frame sending with proper interval
   useEffect(() => {
     if (isTracking && wsConnected) {
-      // Send frames at 10 FPS (100ms interval) for optimal performance
-      frameIntervalRef.current = setInterval(sendFramesLoop, 100);
-      addToConsole('▶️ Started sending frames at 10 FPS');
+      // Reduce to 5 FPS (200ms interval) to prevent overwhelming the connection
+      frameIntervalRef.current = setInterval(sendFramesLoop, 200);
+      addToConsole('▶️ Started sending frames at 5 FPS to prevent overload');
+      
+      // Add periodic connection health check
+      const healthCheckInterval = setInterval(() => {
+        if (handTrackingApiRef.current?.ws) {
+          const wsState = handTrackingApiRef.current.ws.readyState;
+          console.log(`💓 WebSocket health check: state=${wsState}, queue=${handTrackingApiRef.current.frameQueue}`);
+          
+          if (wsState !== WebSocket.OPEN) {
+            console.warn('⚠️ WebSocket connection lost during tracking!');
+            addToConsole('❌ WebSocket connection lost - stopping tracking');
+            setIsTracking(false);
+          }
+        }
+      }, 5000); // Check every 5 seconds
+      
+      return () => {
+        clearInterval(healthCheckInterval);
+      };
     } else {
       if (frameIntervalRef.current) {
         clearInterval(frameIntervalRef.current);
