@@ -160,8 +160,8 @@ class HandTrackingAPI {
       }
       
       try {
-        // Follow the exact format from the backend guide
-        const imageData = canvas.toDataURL('image/jpeg', 0.7); // Slightly lower quality for performance
+        // Use the format that works with your local backend
+        const imageData = canvas.toDataURL('image/jpeg', 0.7);
         
         const message = {
           type: 'image',
@@ -169,7 +169,7 @@ class HandTrackingAPI {
           tracking_mode: trackingMode,
           robot_type: robotType,
           timestamp: new Date().toISOString(),
-          client_timestamp: Date.now() // For latency calculation
+          client_timestamp: Date.now()
         };
         
         this.ws.send(JSON.stringify(message));
