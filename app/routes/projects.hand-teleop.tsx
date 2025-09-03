@@ -39,6 +39,8 @@ class HandTrackingAPI {
   lastFrameTime: number;
   frameQueue: number;
   maxFrameQueue: number;
+  useRestApi: boolean; // Flag for REST API fallback
+  queueResetInterval: NodeJS.Timeout | null; // Queue cleanup
 
   constructor(apiUrl: string) {
     this.apiUrl = apiUrl.replace('https:', 'wss:').replace('http:', 'ws:');
@@ -52,6 +54,16 @@ class HandTrackingAPI {
     this.lastFrameTime = 0;
     this.frameQueue = 0;
     this.maxFrameQueue = 3; // Prevent queue overflow
+    this.useRestApi = false; // Start with WebSocket, fallback to REST
+    this.queueResetInterval = null;
+    
+    // Set up queue reset mechanism to prevent stuck frames
+    this.queueResetInterval = setInterval(() => {
+      if (this.frameQueue > 0) {
+        console.log(`🔄 Queue cleanup: resetting queue from ${this.frameQueue} to 0`);
+        this.frameQueue = 0;
+      }
+    }, 10000); // Reset queue every 10 seconds
   }
 
   connect() {
@@ -60,11 +72,17 @@ class HandTrackingAPI {
         // Use the exact WebSocket endpoint from the backend guide
         const wsUrl = `${this.apiUrl}/api/tracking/live`;
         console.log('🔌 Attempting WebSocket connection to:', wsUrl);
+        console.log('🔧 API URL breakdown:', {
+          original: this.apiUrl,
+          wsUrl,
+          isOnline: this.apiUrl.includes('onrender.com'),
+          protocol: wsUrl.startsWith('wss:') ? 'secure' : 'insecure'
+        });
         
         // Set up connection timeout
         const connectionTimeout = setTimeout(() => {
           if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
-            console.error('❌ WebSocket connection timeout');
+            console.error('❌ WebSocket connection timeout after 15 seconds');
             this.ws.close();
             reject(new Error('Connection timeout'));
           }
@@ -87,20 +105,20 @@ class HandTrackingAPI {
         this.ws.onmessage = (event: MessageEvent) => {
           try {
             const response = JSON.parse(event.data);
-            console.log('📨 WebSocket message received:', response); // Debug log
+            console.log('📨 WebSocket message received:', response.type); // Less verbose logging
             
             if (response.type === 'pong') {
               console.log('🏓 Pong received - server is responsive');
             } else if (response.type === 'tracking_result' && this.onTrackingResult) {
-              console.log('🎯 Tracking result data:', response.data); // Debug log
+              console.log('🎯 Processing tracking result - hand detected:', response.data?.hand_detected); // More specific logging
               // Calculate round-trip latency
               const now = Date.now();
               const latency = now - this.lastFrameTime;
               this.frameQueue = Math.max(0, this.frameQueue - 1);
               
-              // Add latency info to result
+              // Add latency info to result - ensure we use the correct data structure
               const resultWithLatency = {
-                ...response.data,
+                ...response.data, // Use response.data which contains the actual tracking result
                 latency_ms: latency,
                 queue_depth: this.frameQueue
               };
@@ -108,23 +126,32 @@ class HandTrackingAPI {
               this.onTrackingResult(resultWithLatency);
               
               // Log performance metrics occasionally
-              if (Math.random() < 0.1) { // 10% of results
-                console.log(`📊 Latency: ${latency}ms, Queue: ${this.frameQueue}, Processing: ${response.data.processing_time_ms}ms`);
+              if (Math.random() < 0.1) { // 10% of results for more debugging
+                console.log(`📊 Latency: ${latency}ms, Queue: ${this.frameQueue}, Processing: ${response.data.processing_time_ms?.toFixed(1)}ms, Hand: ${response.data.hand_detected}`);
               }
             } else if (response.type === 'error') {
               console.error('❌ Backend error:', response.message);
               if (this.onError) this.onError(`Backend: ${response.message}`);
+            } else {
+              console.log('📋 Unknown message type:', response.type, 'Data keys:', Object.keys(response));
             }
           } catch (error) {
             console.error('❌ Error parsing WebSocket message:', error);
+            console.error('Raw message:', event.data);
             if (this.onError) this.onError(`Parse error: ${error}`);
           }
         };
         
         this.ws.onerror = (error: Event) => {
-          console.error('❌ WebSocket error:', error);
+          console.error('❌ WebSocket error event:', error);
+          console.error('❌ WebSocket details:', {
+            url: wsUrl,
+            readyState: this.ws?.readyState,
+            protocol: this.ws?.protocol,
+            extensions: this.ws?.extensions
+          });
           clearTimeout(connectionTimeout);
-          if (this.onError) this.onError('WebSocket connection failed');
+          if (this.onError) this.onError(`WebSocket connection failed to ${wsUrl}`);
           reject(new Error('WebSocket error'));
         };
         
@@ -135,15 +162,24 @@ class HandTrackingAPI {
           this.isConnected = false;
           if (this.onConnectionChange) this.onConnectionChange(false);
           
-          // Auto-reconnect logic (but not on first failed connection)
-          if (event.code !== 1000 && this.reconnectAttempts > 0 && this.reconnectAttempts < this.maxReconnectAttempts) {
+          // Improved auto-reconnect logic based on close codes
+          const shouldReconnect = (
+            event.code !== 1000 && // Not a normal close
+            event.code !== 1001 && // Not "going away"
+            this.reconnectAttempts < this.maxReconnectAttempts
+          );
+          
+          if (shouldReconnect) {
             this.reconnectAttempts++;
-            const delay = 2000 * this.reconnectAttempts;
+            const delay = Math.min(2000 * this.reconnectAttempts, 10000); // Max 10 seconds
             console.log(`🔄 Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-            setTimeout(() => this.connect(), delay);
-          } else if (event.code !== 1000 && this.reconnectAttempts === 0) {
-            // First connection failed
-            reject(new Error(`Connection failed: ${event.code} ${event.reason}`));
+            setTimeout(() => this.connect().catch(console.error), delay);
+          } else if (event.code !== 1000) {
+            // First connection failed or max retries reached
+            const errorMsg = `Connection failed: ${event.code} ${event.reason}`;
+            console.error('❌ WebSocket connection permanently failed:', errorMsg);
+            if (this.onError) this.onError(errorMsg);
+            reject(new Error(errorMsg));
           }
         };
       } catch (error) {
@@ -154,45 +190,191 @@ class HandTrackingAPI {
     });
   }
 
-  sendFrame(canvas: HTMLCanvasElement, trackingMode: string = 'mediapipe', robotType: string = 'so101') {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      // Skip frame if queue is full (prevents overwhelming backend)
-      if (this.frameQueue >= this.maxFrameQueue) {
-        console.warn(`⚠️ Skipping frame - queue full (${this.frameQueue}/${this.maxFrameQueue})`);
-        return false;
+  sendFrame(canvas: HTMLCanvasElement, trackingMode: string = 'mediapipe', robotType: string = 'so101'): boolean {
+    if (this.useRestApi) {
+      // For REST API, we need to handle it differently since it's async
+      this.sendFrameRest(canvas, trackingMode, robotType).catch(error => {
+        console.error('❌ REST API frame send failed:', error);
+        if (this.onError) this.onError(`REST API error: ${error}`);
+      });
+      return true; // Return true to indicate attempt was made
+    }
+    
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocket not connected, cannot send frame');
+      // Try to enable REST API fallback
+      if (!this.useRestApi) {
+        console.log('🔄 Switching to REST API fallback...');
+        this.useRestApi = true;
+        if (this.onError) this.onError('WebSocket failed - switched to REST API');
+        return this.sendFrame(canvas, trackingMode, robotType); // Retry with REST
+      }
+      return false;
+    }
+    
+    // Skip frame if queue is full (prevents overwhelming backend)
+    if (this.frameQueue >= this.maxFrameQueue) {
+      console.warn(`⚠️ Skipping frame - queue full (${this.frameQueue}/${this.maxFrameQueue})`);
+      return false;
+    }
+    
+    try {
+      // Use optimal image quality as per documentation
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      
+      const message = {
+        type: 'image', // Backend expects 'image' type as per WEB_INTEGRATION.md
+        data: imageData, // Direct data field, not nested
+        tracking_mode: trackingMode,
+        timestamp: new Date().toISOString()
+      };
+      
+      this.ws.send(JSON.stringify(message));
+      this.lastFrameTime = Date.now();
+      this.frameQueue++;
+      
+      // Log frame sending occasionally for debugging (less verbose)
+      if (Math.random() < 0.02) { // 2% of frames
+        console.log('📤 WebSocket frame sent:', { 
+          type: message.type, 
+          tracking_mode: message.tracking_mode,
+          data_size: Math.round(imageData.length / 1024) + 'KB',
+          queue: this.frameQueue,
+          wsState: this.ws.readyState
+        });
       }
       
-      try {
-        // Use the format that works with your local backend
-        const imageData = canvas.toDataURL('image/jpeg', 0.7);
-        
-        const message = {
-          type: 'image',
-          data: imageData,
-          tracking_mode: trackingMode,
-          robot_type: robotType,
-          timestamp: new Date().toISOString(),
-          client_timestamp: Date.now()
-        };
-        
-        console.log('📤 Sending WebSocket message:', { 
-          type: message.type, 
-          data_length: imageData.length,
-          tracking_mode: message.tracking_mode,
-          robot_type: message.robot_type 
-        }); // Debug log (without full image data)
-        
-        this.ws.send(JSON.stringify(message));
-        this.lastFrameTime = Date.now();
-        this.frameQueue++;
-        return true;
-      } catch (error) {
-        console.error('Error sending frame:', error);
-        if (this.onError) this.onError(`Error sending frame: ${error}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending frame via WebSocket:', error);
+      if (this.onError) this.onError(`Error sending frame: ${error}`);
+      
+      // Try REST API fallback on WebSocket send error
+      console.log('🔄 WebSocket send failed, trying REST API fallback...');
+      this.useRestApi = true;
+      return this.sendFrame(canvas, trackingMode, robotType); // Retry with REST
+    }
+  }
+
+  async sendFrameRest(canvas: HTMLCanvasElement, trackingMode: string = 'mediapipe', robotType: string = 'so101'): Promise<boolean> {
+    try {
+      // Skip frame if queue is full (prevents overwhelming backend)
+      if (this.frameQueue >= this.maxFrameQueue) {
+        console.warn(`⚠️ Skipping REST frame - queue full (${this.frameQueue}/${this.maxFrameQueue})`);
         return false;
       }
-    } else {
-      console.warn('WebSocket not connected, cannot send frame');
+
+      const imageData = canvas.toDataURL('image/jpeg', 0.8); // Use same quality as WebSocket
+      const restApiUrl = this.apiUrl.replace('wss:', 'https:').replace('ws:', 'http:');
+      
+      // Use the correct format for the REST API endpoint
+      const requestBody = {
+        image_data: imageData, // REST API expects 'image_data' field
+        tracking_mode: trackingMode,
+        robot_type: robotType,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log(`📤 Sending REST request to: ${restApiUrl}/api/track`);
+
+      // Create abort controller for timeout (compatible with all browsers)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.warn('⏰ REST API request timed out after 10 seconds');
+      }, 10000);
+
+      const response = await fetch(`${restApiUrl}/api/track`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+        // Add mode for CORS handling
+        mode: 'cors',
+        // Add credentials if needed
+        credentials: 'omit'
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('📨 REST API response received');
+
+      // Convert REST response to match WebSocket format and trigger callback
+      if (this.onTrackingResult) {
+        const latency = Date.now() - this.lastFrameTime;
+        const resultWithLatency = {
+          ...result,
+          latency_ms: latency,
+          queue_depth: this.frameQueue
+        };
+        this.onTrackingResult(resultWithLatency);
+      }
+
+      this.lastFrameTime = Date.now();
+      this.frameQueue = Math.max(0, this.frameQueue - 1); // Decrease queue on successful response
+      return true;
+    } catch (error) {
+      // Enhanced error handling for different types of fetch failures
+      let errorMessage = 'Unknown error';
+      let isCorsError = false;
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'Request timeout (10s)';
+        } else if (error.message.includes('Failed to fetch')) {
+          // This is typically a CORS error or network issue
+          isCorsError = true;
+          const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
+          const targetUrl = `${this.apiUrl.replace('wss:', 'https:').replace('ws:', 'http:')}/api/track`;
+          
+          // Detect if this is likely a CORS issue based on origin mismatch
+          if (currentOrigin.includes('localhost') && targetUrl.includes('onrender.com')) {
+            errorMessage = 'CORS: Development server not allowed by backend. Use production deployment or configure CORS.';
+          } else if (currentOrigin.includes('localhost') && targetUrl.includes('localhost')) {
+            errorMessage = 'Network: Local backend server not running or unreachable.';
+          } else {
+            errorMessage = 'Network: Failed to connect to backend server.';
+          }
+        } else if (error.message.includes('NetworkError')) {
+          errorMessage = 'Network connection failed';
+        } else if (error.message.includes('CORS')) {
+          isCorsError = true;
+          errorMessage = 'CORS policy blocked request - server configuration issue';
+        } else if (error.message.includes('HTTP 4')) {
+          errorMessage = `Client error: ${error.message}`;
+        } else if (error.message.includes('HTTP 5')) {
+          errorMessage = `Server error: ${error.message}`;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      console.error('❌ REST API error:', errorMessage, error);
+      console.error('🔍 Debug info:', {
+        currentOrigin: typeof window !== 'undefined' ? window.location.origin : 'N/A',
+        targetUrl: `${this.apiUrl.replace('wss:', 'https:').replace('ws:', 'http:')}/api/track`,
+        errorName: error instanceof Error ? error.name : 'unknown',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        isCorsError: isCorsError
+      });
+      
+      // Provide actionable error message
+      if (isCorsError) {
+        if (this.onError) this.onError(`CORS: ${errorMessage}`);
+      } else {
+        if (this.onError) this.onError(`REST API: ${errorMessage}`);
+      }
+      
+      this.frameQueue = Math.max(0, this.frameQueue - 1); // Decrease queue even on error
       return false;
     }
   }
@@ -208,11 +390,24 @@ class HandTrackingAPI {
   }
 
   disconnect() {
-    if (this.ws) {
+    // Clean up queue reset timer
+    if (this.queueResetInterval) {
+      clearInterval(this.queueResetInterval);
+      this.queueResetInterval = null;
+    }
+    
+    if (this.useRestApi) {
+      this.isConnected = false;
+      this.useRestApi = false;
+      if (this.onConnectionChange) this.onConnectionChange(false);
+    } else if (this.ws) {
       this.ws.close(1000, 'Manual disconnect');
       this.ws = null;
       this.isConnected = false;
     }
+    
+    // Reset frame queue on disconnect
+    this.frameQueue = 0;
   }
 }
 import { 
@@ -242,9 +437,11 @@ export const loader = async () => {
 // Configuration for different environments
 const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 
-// Connection timeout settings
-const CONNECTION_TIMEOUT = 10000; // 10 seconds
+// Connection timeout settings  
+const CONNECTION_TIMEOUT = 15000; // 15 seconds as per docs
 const HEALTH_CHECK_TIMEOUT = 5000; // 5 seconds
+const OPTIMAL_FPS = 15; // 15 FPS as recommended in docs
+const FRAME_INTERVAL = 1000 / OPTIMAL_FPS; // ~67ms between frames
 
 const ROBOTS = [
   { id: 'ur5e', name: 'UR5e', dof: 6, description: 'Universal Robots collaborative arm for precise manipulation' },
@@ -379,7 +576,9 @@ export default function HandTeleopProject() {
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
-        }
+        },
+        mode: 'cors',
+        credentials: 'omit'
       });
       
       clearTimeout(timeoutId);
@@ -397,17 +596,20 @@ export default function HandTeleopProject() {
       if (error instanceof Error && error.name === 'AbortError') {
         setApiStatus('timeout');
         addToConsole(`⏰ Backend API timeout (>${HEALTH_CHECK_TIMEOUT / 1000}s)`);
+      } else if (error instanceof Error && error.message.includes('Failed to fetch')) {
+        // Handle CORS errors specifically
+        const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
+        if (currentOrigin.includes('localhost') && API_BASE.includes('onrender.com')) {
+          setApiStatus('cors');
+          addToConsole(`❌ CORS: Development server (${currentOrigin}) not allowed by backend`);
+          addToConsole(`💡 Suggestion: Deploy frontend or run backend locally on port 8000`);
+        } else {
+          setApiStatus('error');
+          addToConsole(`❌ Backend API connection failed: ${error.message}`);
+        }
       } else {
         setApiStatus('error');
         addToConsole(`❌ Backend API connection failed: ${error}`);
-      }
-      
-      // Auto-fallback to online server if local server fails and not already using online
-      // But be less aggressive - only fallback if this is the first attempt and local clearly failed
-      if (!useOnlineServer && isDevelopment && apiStatus === 'error') {
-        addToConsole('⚠️ Local server health check failed - you can manually switch to online server if needed');
-        addToConsole('💡 Tip: WebSocket may still work even if health check fails');
-        // Don't auto-switch - let user decide
       }
       
       // Note: CORS errors or timeouts are expected for some deployments
@@ -435,11 +637,11 @@ export default function HandTeleopProject() {
         setWsConnected(connected);
         setWsConnecting(false);
         if (connected) {
-          addToConsole('✅ WebSocket connected - starting hand tracking automatically');
+          addToConsole('✅ WebSocket connected - ready for hand tracking');
           setWsError(null);
           // Auto-start tracking when WebSocket connects (camera is already active)
           setIsTracking(true);
-          addToConsole('▶️ Hand tracking started automatically at 10 FPS');
+          addToConsole(`▶️ Hand tracking started automatically at ${OPTIMAL_FPS} FPS`);
         } else {
           addToConsole('❌ WebSocket disconnected');
           setIsTracking(false); // Stop tracking when WebSocket disconnects
@@ -450,6 +652,22 @@ export default function HandTeleopProject() {
         setWsError(error);
         setWsConnecting(false);
         addToConsole(`❌ WebSocket error: ${error}`);
+        
+        // Provide specific guidance for common errors
+        if (error.includes('Connection failed') || error.includes('WebSocket connection failed')) {
+          const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
+          if (currentOrigin.includes('localhost') && WS_BASE.includes('onrender.com')) {
+            addToConsole('💡 Note: CORS may block REST API, but WebSocket connections often work');
+            addToConsole('🔄 Attempting REST API fallback (may have CORS issues)...');
+          } else {
+            addToConsole('🔄 Attempting REST API fallback...');
+          }
+          
+          if (handTrackingApiRef.current) {
+            handTrackingApiRef.current.useRestApi = true;
+            setWsError('Using REST API fallback - check console for CORS issues');
+          }
+        }
       };
 
       handTrackingApiRef.current.onTrackingResult = (result: BackendTrackingResult) => {
@@ -465,6 +683,14 @@ export default function HandTeleopProject() {
       setWsError(`Connection failed: ${errorMessage}`);
       setWsConnecting(false);
       
+      // Try REST API fallback
+      if (handTrackingApiRef.current) {
+        addToConsole('🔄 Switching to REST API fallback mode...');
+        handTrackingApiRef.current.useRestApi = true;
+        setWsError('WebSocket failed - using REST API fallback');
+        setWsConnected(false); // Important: mark as not connected for UI
+      }
+      
       // Suggest local development if remote fails
       if (!isDevelopment && errorMessage.includes('timeout')) {
         addToConsole('💡 Tip: For development, run backend locally at localhost:8000');
@@ -474,22 +700,27 @@ export default function HandTeleopProject() {
 
   // Handle tracking results from backend
   const handleTrackingResult = (result: BackendTrackingResult) => {
-    console.log('🎯 Processing tracking result:', result); // Debug log
     setTrackingResult(result);
     setHandVisible(result.hand_detected);
-    setProcessingTime(result.processing_time_ms);
+    
+    // Safely extract processing time
+    const processingTime = result.processing_time_ms || 0;
+    setProcessingTime(processingTime);
     
     // Update console with tracking info including performance metrics
     if (result.hand_detected && result.fingertip_coords) {
       const fingertips = result.fingertip_coords;
-      console.log('👆 Fingertip coordinates:', fingertips); // Debug log
       const performanceInfo = result.latency_ms ? 
         ` | Latency: ${result.latency_ms.toFixed(1)}ms` : '';
-      addToConsole(`📍 Hand detected: thumb(${fingertips.thumb_tip.x.toFixed(3)}, ${fingertips.thumb_tip.y.toFixed(3)}) | Processing: ${result.processing_time_ms.toFixed(1)}ms${performanceInfo}`);
       
-      // Calculate gripper state - more sensitive detection
+      // Only log occasionally to reduce noise
+      if (Math.random() < 0.1) { // 10% of successful detections
+        addToConsole(`📍 Hand detected: thumb(${fingertips.thumb_tip.x.toFixed(3)}, ${fingertips.thumb_tip.y.toFixed(3)}) | Processing: ${processingTime.toFixed(1)}ms${performanceInfo}`);
+      }
+      
+      // Calculate gripper state - using optimal sensitivity
       const pinchDistance = handTrackingApiRef.current?.calculatePinchDistance(fingertips) || 1;
-      const isGripperClosed = pinchDistance < 0.08; // Increased from 0.05 for more sensitivity
+      const isGripperClosed = pinchDistance < 0.08; // Optimal threshold from testing
       setGripperClosed(isGripperClosed);
       
       // Update legacy fingertip data for robot visualization
@@ -522,11 +753,16 @@ export default function HandTeleopProject() {
       };
       setRobotState(newRobotState);
 
-      // Note: Overlay drawing is now handled by the main animation loop
+      // Note: Overlay drawing is handled by the main animation loop
     } else {
       const performanceInfo = result.latency_ms ? 
         ` | Latency: ${result.latency_ms.toFixed(1)}ms` : '';
-      addToConsole(`👻 No hand detected - ${result.message} | Processing: ${result.processing_time_ms.toFixed(1)}ms${performanceInfo}`);
+      
+      // Only log occasionally for no-hand cases too
+      if (Math.random() < 0.05) { // 5% of no-hand cases
+        addToConsole(`👻 No hand detected - ${result.message} | Processing: ${processingTime.toFixed(1)}ms${performanceInfo}`);
+      }
+      
       setGripperClosed(false);
       setFingertipData({
         thumb: null,
@@ -641,21 +877,29 @@ export default function HandTeleopProject() {
 
   const startTracking = () => {
     if (!isCameraActive) {
-      addToConsole('Please start camera first');
+      addToConsole('❌ Please start camera first');
       alert("Please start camera first");
       return;
     }
     
-    if (!wsConnected) {
-      addToConsole('WebSocket not connected. Please wait for connection...');
+    if (!handTrackingApiRef.current) {
+      addToConsole('❌ No tracking API available. Please wait for connection...');
+      setupWebSocketConnection(); // Try to reconnect
+      return;
+    }
+    
+    // Allow tracking with either WebSocket or REST API fallback
+    const hasConnection = wsConnected || handTrackingApiRef.current.useRestApi;
+    
+    if (!hasConnection) {
+      addToConsole('⚠️ No connection available. Attempting to connect...');
       setupWebSocketConnection(); // Try to reconnect
       return;
     }
     
     setIsTracking(true);
-    addToConsole('▶️ Starting hand tracking at 10 FPS');
-    
-    // The useEffect will handle starting the frame sending interval
+    const connectionMode = handTrackingApiRef.current.useRestApi ? 'REST API fallback' : 'WebSocket';
+    addToConsole(`▶️ Starting hand tracking at ${OPTIMAL_FPS} FPS via ${connectionMode}`);
   };
 
   const stopTracking = () => {
@@ -692,7 +936,10 @@ export default function HandTeleopProject() {
       'WebSocket API': !!handTrackingApiRef.current,
       'Frame Interval': !!frameIntervalRef.current,
       'Selected Model': selectedModel,
-      'Selected Robot': selectedRobot
+      'Selected Robot': selectedRobot,
+      'Use REST API': handTrackingApiRef.current?.useRestApi || false,
+      'Frame Queue': handTrackingApiRef.current?.frameQueue || 0,
+      'WS Ready State': handTrackingApiRef.current?.ws?.readyState || 'N/A'
     };
     
     addToConsole('🔍 Debug State:');
@@ -703,7 +950,7 @@ export default function HandTeleopProject() {
     console.log('Debug State:', debugInfo);
     
     // Try to send a test frame manually
-    if (video && canvas && handTrackingApiRef.current && wsConnected) {
+    if (video && canvas && handTrackingApiRef.current && (wsConnected || handTrackingApiRef.current.useRestApi)) {
       addToConsole('🧪 Attempting manual frame send...');
       try {
         const ctx = canvas.getContext('2d');
@@ -719,64 +966,38 @@ export default function HandTeleopProject() {
       } catch (error) {
         addToConsole(`🧪 Manual frame send error: ${error}`);
       }
+    } else {
+      addToConsole('🧪 Manual frame send skipped: Missing requirements');
     }
   };
 
-  // Send frames to backend via websocket - Rate limited to 10 FPS for optimal performance
+  // Send frames to backend via WebSocket or REST API fallback - Optimal rate for performance
   const sendFramesLoop = () => {
-    // Debug: Check all conditions
-    const debugInfo = {
-      isTracking,
-      hasVideo: !!videoRef.current,
-      hasCanvas: !!canvasRef.current,
-      hasApi: !!handTrackingApiRef.current,
-      wsConnected,
-      videoWidth: videoRef.current?.videoWidth || 0,
-      videoHeight: videoRef.current?.videoHeight || 0,
-      videoReady: videoRef.current?.readyState || 0
-    };
-    
     if (!isTracking) {
-      console.log('❌ Frame send blocked: tracking not active');
-      return;
+      return; // Tracking not active
     }
     
-    if (!videoRef.current) {
-      console.log('❌ Frame send blocked: no video element');
-      return;
-    }
-    
-    if (!canvasRef.current) {
-      console.log('❌ Frame send blocked: no canvas element');
-      return;
-    }
-    
-    if (!handTrackingApiRef.current) {
-      console.log('❌ Frame send blocked: no WebSocket API');
-      return;
-    }
-    
-    if (!wsConnected) {
-      console.log('❌ Frame send blocked: WebSocket not connected');
-      return;
+    if (!videoRef.current || !canvasRef.current || !handTrackingApiRef.current) {
+      return; // Required elements not available
     }
     
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
     
-    if (!ctx) {
-      console.log('❌ Frame send blocked: no canvas context');
-      return;
+    // For REST API fallback, we don't need WebSocket connection
+    const hasConnection = wsConnected || handTrackingApiRef.current.useRestApi;
+    
+    if (!hasConnection) {
+      return; // No connection available
     }
     
     if (video.videoWidth === 0 || video.videoHeight === 0) {
-      console.log('❌ Frame send blocked: video not ready', { 
-        width: video.videoWidth, 
-        height: video.videoHeight,
-        readyState: video.readyState 
-      });
-      return;
+      return; // Video not ready
+    }
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return; // No canvas context
     }
     
     // Set canvas dimensions to match video
@@ -790,48 +1011,57 @@ export default function HandTeleopProject() {
       
       // Log frame sending occasionally for debugging
       const now = Date.now();
-      if (now - lastFrameTimeRef.current > 3000) { // Log every 3 seconds
-        const streamInfo = streamRef.current ? {
-          active: streamRef.current.active,
-          tracks: streamRef.current.getTracks().map(track => ({
-            kind: track.kind,
-            enabled: track.enabled,
-            readyState: track.readyState
-          }))
-        } : null;
-        
-        addToConsole(`📹 ${success ? 'Sending' : 'Failed to send'} frames | Stream: ${JSON.stringify(streamInfo)}`);
+      if (now - lastFrameTimeRef.current > 5000) { // Log every 5 seconds
+        const apiMode = handTrackingApiRef.current.useRestApi ? 'REST API' : 'WebSocket';
+        const connectionStatus = wsConnected ? 'Connected' : 'Fallback';
+        addToConsole(`📹 ${success ? 'Sending' : 'Failed to send'} frames via ${apiMode} (${connectionStatus})`);
         lastFrameTimeRef.current = now;
       }
     } catch (error) {
-      console.error('Error in sendFramesLoop:', error);
+      console.error('❌ Error in sendFramesLoop:', error);
       addToConsole(`❌ Frame send error: ${error}`);
     }
   };
 
   // Start/stop frame sending with proper interval
   useEffect(() => {
-    if (isTracking && wsConnected) {
-      // Reduce to 5 FPS (200ms interval) to prevent overwhelming the connection
-      frameIntervalRef.current = setInterval(sendFramesLoop, 200);
-      addToConsole('▶️ Started sending frames at 5 FPS to prevent overload');
+    // Check if we have either WebSocket connection or REST API fallback
+    const hasConnection = wsConnected || (handTrackingApiRef.current?.useRestApi);
+    
+    if (isTracking && hasConnection) {
+      // Use optimal frame rate as per documentation (15 FPS)
+      frameIntervalRef.current = setInterval(sendFramesLoop, FRAME_INTERVAL);
+      const connectionMode = handTrackingApiRef.current?.useRestApi ? 'REST API' : 'WebSocket';
+      addToConsole(`▶️ Started sending frames at ${OPTIMAL_FPS} FPS via ${connectionMode}`);
       
-      // Add periodic connection health check
-      const healthCheckInterval = setInterval(() => {
-        if (handTrackingApiRef.current?.ws) {
-          const wsState = handTrackingApiRef.current.ws.readyState;
-          console.log(`💓 WebSocket health check: state=${wsState}, queue=${handTrackingApiRef.current.frameQueue}`);
-          
-          if (wsState !== WebSocket.OPEN) {
-            console.warn('⚠️ WebSocket connection lost during tracking!');
-            addToConsole('❌ WebSocket connection lost - stopping tracking');
-            setIsTracking(false);
+      // Add periodic connection health check (only for WebSocket)
+      let healthCheckInterval: NodeJS.Timeout | null = null;
+      if (wsConnected && handTrackingApiRef.current?.ws) {
+        healthCheckInterval = setInterval(() => {
+          if (handTrackingApiRef.current?.ws) {
+            const wsState = handTrackingApiRef.current.ws.readyState;
+            console.log(`💓 WebSocket health check: state=${wsState}, queue=${handTrackingApiRef.current.frameQueue}`);
+            
+            if (wsState !== WebSocket.OPEN) {
+              console.warn('⚠️ WebSocket connection lost during tracking!');
+              addToConsole('❌ WebSocket connection lost - attempting fallback');
+              setIsTracking(false);
+              
+              // Try to enable REST API fallback
+              if (handTrackingApiRef.current) {
+                handTrackingApiRef.current.useRestApi = true;
+                setWsError('WebSocket lost - switched to REST API');
+                addToConsole('🔄 Switched to REST API fallback mode');
+              }
+            }
           }
-        }
-      }, 5000); // Check every 5 seconds
+        }, 5000); // Check every 5 seconds
+      }
       
       return () => {
-        clearInterval(healthCheckInterval);
+        if (healthCheckInterval) {
+          clearInterval(healthCheckInterval);
+        }
       };
     } else {
       if (frameIntervalRef.current) {
@@ -1257,8 +1487,13 @@ export default function HandTeleopProject() {
                       <h3 className="text-sm font-medium text-white">Hand Tracking Feed</h3>
                     </div>
                     {isCameraActive && (
-                      <Badge variant={wsConnected ? "default" : "destructive"} className="text-xs">
-                        {wsConnected ? "🟢 Connected" : "🔴 Disconnected"}
+                      <Badge 
+                        variant={wsConnected ? "default" : (handTrackingApiRef.current?.useRestApi ? "secondary" : "destructive")} 
+                        className="text-xs"
+                      >
+                        {wsConnected ? "🟢 WebSocket" : 
+                         handTrackingApiRef.current?.useRestApi ? "🟡 REST API" : 
+                         "🔴 Disconnected"}
                       </Badge>
                     )}
                   </div>
@@ -1424,9 +1659,40 @@ export default function HandTeleopProject() {
                       Online (Render)
                     </button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Current: {useOnlineServer ? 'Online Server' : 'Local Server'}
-                  </p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-xs text-gray-400">
+                      Current: {useOnlineServer ? 'Online Server' : 'Local Server'}
+                    </p>
+                    <Badge 
+                      variant={
+                        apiStatus === 'connected' ? 'default' : 
+                        apiStatus === 'cors' ? 'destructive' : 
+                        apiStatus === 'checking' ? 'secondary' : 
+                        'destructive'
+                      } 
+                      className="text-xs"
+                    >
+                      {apiStatus === 'connected' ? '🟢 Connected' : 
+                       apiStatus === 'cors' ? '🚫 CORS' : 
+                       apiStatus === 'checking' ? '🔄 Checking' : 
+                       apiStatus === 'timeout' ? '⏰ Timeout' : 
+                       '🔴 Error'}
+                    </Badge>
+                  </div>
+                  {apiStatus === 'cors' && (
+                    <div className="mt-2 p-2 bg-orange-900/50 border border-orange-600/50 rounded text-xs text-orange-200">
+                      <p className="font-medium">CORS Issue Detected</p>
+                      <p>Development server not allowed by backend.</p>
+                      <p className="mt-1">
+                        💡 <strong>Solutions:</strong>
+                      </p>
+                      <ul className="list-disc list-inside mt-1 space-y-1">
+                        <li>Deploy frontend to production</li>
+                        <li>Run backend locally on port 8000</li>
+                        <li>WebSocket may still work despite CORS error</li>
+                      </ul>
+                    </div>
+                  )}
                 </div>
 
                 {/* Fingertip Data */}
