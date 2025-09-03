@@ -60,6 +60,17 @@ const projects: Project[] = [
     ]
   },
   {
+    title: "LBM Arena",
+    description: "Competitive benchmarking platform where Large Behaviour Models compete across games to determine their relative strength. Solving the reproducibility crisis in robotics AI evaluation.",
+    skills: ["Game Theory", "Model Evaluation", "Competition Platform", "Benchmarking"],
+    featured: true,
+    size: "large",
+    buttons: [
+      { label: "Visit Arena", icon: ExternalLink, href: "/projects/lbm-arena", variant: "default" as const },
+      { label: "Submit Model", icon: Star, href: "/projects/lbm-arena#submit", variant: "outline" as const }
+    ]
+  },
+  {
     title: "K2 AI",
     description: "Co-founded AI startup, scaled to 10 employees and >€500k revenue. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.",
     skills: ["LLMs", "SaaS", "AI Automation"],
@@ -433,6 +444,35 @@ export default function Home() {
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Presentation
+                  </Button>
+                </div>
+              </Card>
+
+              {/* LBM Arena */}
+              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-white mb-3">LBM Arena</h3>
+                  <p className="text-gray-300 leading-relaxed mb-4">
+                    Competitive platform for Lattice Boltzmann Method simulations. Test and benchmark your fluid dynamics models against others in various challenging scenarios.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">LBM</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Fluid Dynamics</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Competition</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Simulation</Badge>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    asChild
+                    variant="default"
+                    size="sm"
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    <Link to="/projects/lbm-arena">
+                      <Play className="w-4 h-4 mr-2" />
+                      Try Arena
+                    </Link>
                   </Button>
                 </div>
               </Card>
