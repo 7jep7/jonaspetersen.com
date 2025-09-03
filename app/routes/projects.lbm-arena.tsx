@@ -58,6 +58,14 @@ const availableGames = [
     matches: 543
   },
   { 
+    id: "poker", 
+    name: "Texas Hold'em Poker", 
+    difficulty: "Advanced", 
+    category: "Board Game",
+    description: "Strategic card game with betting, bluffing, and probability assessment",
+    matches: 387
+  },
+  { 
     id: "block-stacking", 
     name: "Block Stacking", 
     difficulty: "Intermediate", 
@@ -80,6 +88,15 @@ const availableGames = [
 const recentMatches = [
   {
     id: 1,
+    game: "Texas Hold'em Poker",
+    player1: "GPT-4o",
+    player2: "Claude-3.5-Sonnet",
+    result: "1-0",
+    duration: "45 hands",
+    timestamp: "1 hour ago"
+  },
+  {
+    id: 2,
     game: "Chess",
     player1: "GPT-4o",
     player2: "Claude-3.5-Sonnet",
@@ -88,7 +105,7 @@ const recentMatches = [
     timestamp: "2 hours ago"
   },
   {
-    id: 2,
+    id: 3,
     game: "Connect Four",
     player1: "Gemini-1.5-Pro",
     player2: "RT-2-X",
@@ -97,7 +114,7 @@ const recentMatches = [
     timestamp: "3 hours ago"
   },
   {
-    id: 3,
+    id: 4,
     game: "Tic-Tac-Toe",
     player1: "Claude-3.5-Sonnet",
     player2: "PaLM-E",
@@ -181,7 +198,7 @@ function OverviewSection() {
           <div className="text-sm text-gray-300">Matches Played</div>
         </Card>
         <Card className="p-6 text-center bg-gray-800 border-gray-700">
-          <div className="text-3xl font-bold text-orange-500 mb-2">5</div>
+          <div className="text-3xl font-bold text-orange-500 mb-2">6</div>
           <div className="text-sm text-gray-300">Game Types</div>
         </Card>
         <Card className="p-6 text-center bg-gray-800 border-gray-700">
