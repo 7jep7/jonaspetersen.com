@@ -58,12 +58,22 @@ export default function Home() {
       {/* Main Content */}
       <main className="pt-24">
         {/* Hero Section */}
-        <section className="max-w-4xl mx-auto px-6 py-16 text-center">
-          <div className="flex flex-col items-center">
+        <section className="relative max-w-4xl mx-auto px-6 py-16 text-center">
+          {/* Background Image */}
+          <div className="absolute inset-0 -z-10 rounded-2xl overflow-hidden">
+            <img 
+              src="/images/mixing-console.jpg" 
+              alt="Professional Studio" 
+              className="w-full h-full object-cover opacity-20"
+            />
+            <div className="absolute inset-0 bg-gray-950/80"></div>
+          </div>
+          
+          <div className="relative flex flex-col items-center">
             <img 
               src="/LinkedIn profile pic - shirt.png" 
               alt="Bass-T" 
-              className="w-40 h-40 rounded-full object-cover mb-6 border-4 border-orange-500"
+              className="w-40 h-40 rounded-full object-cover mb-6 border-4 border-orange-500 shadow-xl"
             />
             <h1 className="text-5xl md:text-6xl font-bold mb-4 tracking-tight bg-gradient-to-r from-white via-orange-400 to-orange-600 bg-clip-text text-transparent">
               Bass-T
@@ -87,15 +97,36 @@ export default function Home() {
         <section className="max-w-4xl mx-auto px-6 pb-16 text-center" id="services">
           <h2 className="text-3xl font-bold text-white mb-8">Services</h2>
           <div className="grid md:grid-cols-3 gap-8">
-            <Card className="bg-gray-900 border-gray-800 p-8">
+            <Card className="bg-gray-900 border-gray-800 p-8 overflow-hidden">
+              <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
+                <img 
+                  src="/images/services/mixing-service.jpg" 
+                  alt="Professional Mixing" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <h3 className="text-xl font-bold text-orange-400 mb-3">Mixing</h3>
               <p className="text-gray-300">Professional mixing for artists, producers, and media. Clean, powerful sound tailored to your vision.</p>
             </Card>
-            <Card className="bg-gray-900 border-gray-800 p-8">
+            <Card className="bg-gray-900 border-gray-800 p-8 overflow-hidden">
+              <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
+                <img 
+                  src="/images/services/mastering-service.jpg" 
+                  alt="Professional Mastering" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <h3 className="text-xl font-bold text-orange-400 mb-3">Mastering</h3>
               <p className="text-gray-300">Industry-standard mastering for release-ready tracks. Loud, clear, and competitive.</p>
             </Card>
-            <Card className="bg-gray-900 border-gray-800 p-8">
+            <Card className="bg-gray-900 border-gray-800 p-8 overflow-hidden">
+              <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
+                <img 
+                  src="/images/services/dj-service.jpg" 
+                  alt="DJ Services" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <h3 className="text-xl font-bold text-orange-400 mb-3">Production & DJ</h3>
               <p className="text-gray-300">Beatmaking, end-to-end song production, and DJ services for events, clubs, and private parties.</p>
             </Card>
@@ -106,20 +137,48 @@ export default function Home() {
         <section className="max-w-4xl mx-auto px-6 pb-16 text-center" id="portfolio">
           <h2 className="text-3xl font-bold text-white mb-8">Portfolio Highlights</h2>
           <div className="grid md:grid-cols-2 gap-8">
-            <Card className="bg-gray-900 border-gray-800 p-8">
+            <Card className="bg-gray-900 border-gray-800 p-8 overflow-hidden">
+              <div className="w-full h-48 mb-4 rounded-lg overflow-hidden">
+                <img 
+                  src="/images/portfolio/music-album-1.jpg" 
+                  alt="Astra Rakete Album Cover" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <h3 className="text-xl font-bold text-orange-400 mb-3">Astra Rakete (Masl, Skyden)</h3>
               <p className="text-gray-300 mb-2">500,000+ listens on Spotify</p>
               <a href="https://open.spotify.com/track/1SNt5TkIJhdgjkOD00ezP8?si=84d349faacc14c43" target="_blank" rel="noopener noreferrer" className="text-orange-400 underline">Listen</a>
             </Card>
-            <Card className="bg-gray-900 border-gray-800 p-8">
+            <Card className="bg-gray-900 border-gray-800 p-8 overflow-hidden">
+              <div className="w-full h-48 mb-4 rounded-lg overflow-hidden">
+                <img 
+                  src="/images/portfolio/music-album-2.jpg" 
+                  alt="Tim River Album Cover" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <h3 className="text-xl font-bold text-orange-400 mb-3">Tim River: Feel the tension</h3>
               <a href="https://open.spotify.com/track/0DAc0jmbnfuUTaTqfmFnlL" target="_blank" rel="noopener noreferrer" className="text-orange-400 underline">Listen</a>
             </Card>
-            <Card className="bg-gray-900 border-gray-800 p-8">
+            <Card className="bg-gray-900 border-gray-800 p-8 overflow-hidden">
+              <div className="w-full h-48 mb-4 rounded-lg overflow-hidden">
+                <img 
+                  src="/images/studio-setup.jpg" 
+                  alt="LionKloud Album Cover" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <h3 className="text-xl font-bold text-orange-400 mb-3">LionKloud: Harmony</h3>
               <a href="https://open.spotify.com/track/6eYPukivyvDEoCiHrAz6Ld" target="_blank" rel="noopener noreferrer" className="text-orange-400 underline">Listen</a>
             </Card>
-            <Card className="bg-gray-900 border-gray-800 p-8">
+            <Card className="bg-gray-900 border-gray-800 p-8 overflow-hidden">
+              <div className="w-full h-48 mb-4 rounded-lg overflow-hidden">
+                <img 
+                  src="/images/headphones-studio.jpg" 
+                  alt="House of Amani Album Cover" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <h3 className="text-xl font-bold text-orange-400 mb-3">House of Amani: Uthando</h3>
               <a href="https://open.spotify.com/track/5Whh2yubxjPKTxFZfctCzF?si=Ks82hqHRQii0PnuElOjeog" target="_blank" rel="noopener noreferrer" className="text-orange-400 underline">Listen</a>
             </Card>
