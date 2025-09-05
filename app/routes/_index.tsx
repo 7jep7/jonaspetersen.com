@@ -20,6 +20,7 @@ export const meta = () => [
 
 export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [showShopNotification, setShowShopNotification] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -29,6 +30,11 @@ export default function Home() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const handleShopClick = () => {
+    setShowShopNotification(true);
+    setTimeout(() => setShowShopNotification(false), 3000);
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -60,7 +66,7 @@ export default function Home() {
               variant="outline"
               size="sm"
               className="border-green-600 text-green-400 hover:bg-green-600 hover:text-white font-semibold transition-colors duration-200"
-              onClick={() => alert('Online shop coming soon!')}
+              onClick={handleShopClick}
             >
               Book / Shop
             </Button>
@@ -68,10 +74,20 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Subtle Shop Notification */}
+      {showShopNotification && (
+        <div className="fixed top-20 right-6 z-50 bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 rounded-lg px-4 py-3 shadow-lg animate-in slide-in-from-right-2 fade-in duration-300">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <p className="text-sm text-gray-200">Online shop coming soon</p>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="pt-24">
         {/* Hero Section */}
-        <section className="relative max-w-6xl mx-auto px-6 py-16">
+        <section className="relative max-w-4xl mx-auto px-6 py-16">
           {/* Background Image */}
           <div className="absolute inset-0 -z-10 rounded-2xl overflow-hidden">
             <img 
@@ -85,14 +101,14 @@ export default function Home() {
           {/* Desktop Layout: Left Image, Right Text */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-12">
             {/* Left Side - Image and Social Icons */}
-            <div className="flex flex-col items-center lg:items-start">
+            <div className="flex flex-col items-center">
               <img 
-                src="/LinkedIn profile pic - shirt.png" 
+                src="/sebastian-producer-foto.jpeg" 
                 alt="Sebastian Petersen (Bass-T)" 
-                className="w-44 h-44 lg:w-52 lg:h-52 rounded-full object-cover mb-6 border-4 border-green-500 shadow-2xl"
+                className="w-44 h-44 lg:w-52 lg:h-52 rounded-2xl object-cover mb-6 border-3 border-green-500/60 shadow-2xl"
               />
-              {/* Social Icons - Below Image on Desktop */}
-              <div className="flex justify-center lg:justify-start space-x-6">
+              {/* Social Icons - Centered Below Image */}
+              <div className="flex justify-center space-x-6">
                 <a 
                   href="https://open.spotify.com/artist/40j4uphVTGSVb4EUtLbZ2l" 
                   target="_blank" 
@@ -131,16 +147,16 @@ export default function Home() {
 
             {/* Right Side - Text and CTA */}
             <div className="flex-1 text-center lg:text-left lg:pl-8">
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 tracking-tight bg-gradient-to-r from-white via-gray-100 to-green-400 bg-clip-text text-transparent">
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 tracking-tight bg-gradient-to-r from-white via-green-200 to-green-400 bg-clip-text text-transparent">
                 Bass-T
               </h1>
               <p className="text-xl md:text-2xl text-gray-200 leading-relaxed mb-8 max-w-2xl lg:max-w-none">
-                Audio engineer & producer. Mixing, mastering, beatmaking, DJ services. <br />
-                Professional, clean, and modern sound for artists, advertisers, and events.
+                Bringing your musical vision to life. <br />
+                <span className="text-green-300 font-medium">Premium mixing • Mastering • Production • Live DJ sets</span>
               </p>
               <div className="flex flex-col sm:flex-row justify-center lg:justify-start gap-4">
                 <a 
-                  href="#contact" 
+                  href="#services" 
                   className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
                 >
                   Get Started
@@ -198,19 +214,26 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Portfolio Section */}
+        {/* Projects Section */}
         <section className="max-w-6xl mx-auto px-6 pb-20 text-center" id="portfolio">
-          <h2 className="text-4xl font-bold text-white mb-12">Portfolio Highlights</h2>
+          <h2 className="text-4xl font-bold text-white mb-12">Projects</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             
             {/* House of Amani - Featured */}
             <Card className="md:col-span-2 lg:col-span-1 bg-gradient-to-br from-gray-900/80 to-gray-800/60 border-green-500/30 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300 ring-1 ring-green-500/20">
-              <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
-                <img 
-                  src="/images/headphones-studio.jpg" 
-                  alt="House of Amani Album Cover" 
-                  className="w-full h-full object-cover"
-                />
+              {/* Spotify Embed replacing image */}
+              <div className="w-full mb-4">
+                <iframe 
+                  src="https://open.spotify.com/embed/track/5Whh2yubxjPKTxFZfctCzF?utm_source=generator&theme=0" 
+                  width="100%" 
+                  height="152" 
+                  frameBorder="0" 
+                  allowFullScreen={true}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                  loading="lazy"
+                  className="rounded-lg opacity-95 hover:opacity-100 transition-opacity duration-200 bg-gray-900"
+                  style={{backgroundColor: '#111827'}}
+                ></iframe>
               </div>
               <div className="flex flex-wrap gap-2 mb-3">
                 <span className="px-2 py-1 bg-green-600/25 text-green-300 rounded-full text-xs font-medium border border-green-500/30">Song Production</span>
@@ -223,29 +246,125 @@ export default function Home() {
                   House of Amani
                 </a>
               </div>
-              <h3 className="text-lg font-bold text-green-300 mb-2">Uthando</h3>
-              <p className="text-gray-300 mb-4 text-sm leading-relaxed">Full production & mixing • Featured collaboration</p>
-              <a 
-                href="https://open.spotify.com/track/5Whh2yubxjPKTxFZfctCzF?si=Ks82hqHRQii0PnuElOjeog" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="inline-flex items-center justify-center w-10 h-10 bg-green-500 hover:bg-green-600 rounded-full transition-colors duration-200 hover:scale-110 transform"
-                aria-label="Listen on Spotify"
-              >
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.84-.179-.959-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.361 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
-                </svg>
-              </a>
+              <div className="flex items-center gap-3 mb-2">
+                <a 
+                  href="https://open.spotify.com/track/5Whh2yubxjPKTxFZfctCzF?si=Ks82hqHRQii0PnuElOjeog" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center justify-center w-8 h-8 bg-green-500 hover:bg-green-600 rounded-full transition-colors duration-200 hover:scale-110 transform flex-shrink-0"
+                  aria-label="Listen on Spotify"
+                >
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.84-.179-.959-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.361 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
+                  </svg>
+                </a>
+                <div className="text-left">
+                  <h3 className="text-lg font-bold text-green-300 text-left">Uthando</h3>
+                  <p className="text-gray-300 text-sm leading-relaxed text-left">Full production & mixing • Featured collaboration</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* House of Amani - My Soul */}
+            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+              {/* Spotify Embed replacing image */}
+              <div className="w-full mb-4">
+                <iframe 
+                  src="https://open.spotify.com/embed/track/3bwiMEf4F1zLhI63eUXpDn?utm_source=generator&theme=0" 
+                  width="100%" 
+                  height="152" 
+                  frameBorder="0" 
+                  allowFullScreen={true}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                  loading="lazy"
+                  className="rounded-lg opacity-95 hover:opacity-100 transition-opacity duration-200 bg-gray-900"
+                  style={{backgroundColor: '#111827'}}
+                ></iframe>
+              </div>
+              <div className="flex flex-wrap gap-2 mb-3">
+                <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded-full text-xs font-medium">Song Production</span>
+                <a 
+                  href="https://open.spotify.com/artist/4YYa2gJGOWx9YnxVRYEOAT" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="px-2 py-1 bg-blue-600/20 text-blue-400 rounded-full text-xs font-medium hover:bg-blue-600/30 transition-colors duration-200 cursor-pointer"
+                >
+                  House of Amani
+                </a>
+              </div>
+              <div className="flex items-center gap-3 mb-2">
+                <a 
+                  href="https://open.spotify.com/track/3bwiMEf4F1zLhI63eUXpDn" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center justify-center w-8 h-8 bg-green-500 hover:bg-green-600 rounded-full transition-colors duration-200 hover:scale-110 transform flex-shrink-0"
+                  aria-label="Listen on Spotify"
+                >
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.84-.179-.959-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.361 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
+                  </svg>
+                </a>
+                <div className="text-left">
+                  <h3 className="text-lg font-bold text-green-400 text-left">My Soul</h3>
+                  <p className="text-gray-300 text-sm leading-relaxed text-left">Professional mixing & production collaboration</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Astra Rakete */}
+            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+              {/* Spotify Embed replacing image */}
+              <div className="w-full mb-4">
+                <iframe 
+                  src="https://open.spotify.com/embed/track/1SNt5TkIJhdgjkOD00ezP8?utm_source=generator&theme=0" 
+                  width="100%" 
+                  height="152" 
+                  frameBorder="0" 
+                  allowFullScreen={true}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                  loading="lazy"
+                  className="rounded-lg opacity-95 hover:opacity-100 transition-opacity duration-200 bg-gray-900"
+                  style={{backgroundColor: '#111827'}}
+                ></iframe>
+              </div>
+              <div className="flex flex-wrap gap-2 mb-3">
+                <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded-full text-xs font-medium">Song Production</span>
+                <span className="px-2 py-1 bg-gray-700/50 text-gray-300 rounded-full text-xs font-medium">Masl, Skyden</span>
+              </div>
+              <div className="flex items-center gap-3 mb-2">
+                <a 
+                  href="https://open.spotify.com/track/1SNt5TkIJhdgjkOD00ezP8?si=84d349faacc14c43" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center justify-center w-8 h-8 bg-green-500 hover:bg-green-600 rounded-full transition-colors duration-200 hover:scale-110 transform flex-shrink-0"
+                  aria-label="Listen on Spotify"
+                >
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.84-.179-.959-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.361 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
+                  </svg>
+                </a>
+                <div className="text-left">
+                  <h3 className="text-lg font-bold text-green-400 text-left">Astra Rakete</h3>
+                  <p className="text-gray-300 text-sm leading-relaxed text-left">500,000+ listens on Spotify</p>
+                </div>
+              </div>
             </Card>
 
             {/* Tim River */}
             <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
-              <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
-                <img 
-                  src="/images/portfolio/music-album-2.jpg" 
-                  alt="Tim River Album Cover" 
-                  className="w-full h-full object-cover"
-                />
+              {/* Spotify Embed replacing image */}
+              <div className="w-full mb-4">
+                <iframe 
+                  src="https://open.spotify.com/embed/track/0DAc0jmbnfuUTaTqfmFnlL?utm_source=generator&theme=0" 
+                  width="100%" 
+                  height="152" 
+                  frameBorder="0" 
+                  allowFullScreen={true}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                  loading="lazy"
+                  className="rounded-lg opacity-95 hover:opacity-100 transition-opacity duration-200 bg-gray-900"
+                  style={{backgroundColor: '#111827'}}
+                ></iframe>
               </div>
               <div className="flex flex-wrap gap-2 mb-3">
                 <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded-full text-xs font-medium">Song Production</span>
@@ -258,75 +377,61 @@ export default function Home() {
                   Tim River
                 </a>
               </div>
-              <h3 className="text-lg font-bold text-green-400 mb-2">Feel the tension</h3>
-              <p className="text-gray-300 mb-4 text-sm leading-relaxed">Professional mixing & production</p>
-              <a 
-                href="https://open.spotify.com/track/0DAc0jmbnfuUTaTqfmFnlL" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="inline-flex items-center justify-center w-10 h-10 bg-green-500 hover:bg-green-600 rounded-full transition-colors duration-200 hover:scale-110 transform"
-                aria-label="Listen on Spotify"
-              >
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.84-.179-.959-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.361 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
-                </svg>
-              </a>
-            </Card>
-
-            {/* Astra Rakete */}
-            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
-              <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
-                <img 
-                  src="/images/portfolio/music-album-1.jpg" 
-                  alt="Astra Rakete Album Cover" 
-                  className="w-full h-full object-cover"
-                />
+              <div className="flex items-center gap-3 mb-2">
+                <a 
+                  href="https://open.spotify.com/track/0DAc0jmbnfuUTaTqfmFnlL" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center justify-center w-8 h-8 bg-green-500 hover:bg-green-600 rounded-full transition-colors duration-200 hover:scale-110 transform flex-shrink-0"
+                  aria-label="Listen on Spotify"
+                >
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.84-.179-.959-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.361 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
+                  </svg>
+                </a>
+                <div className="text-left">
+                  <h3 className="text-lg font-bold text-green-400 text-left">Feel the tension</h3>
+                  <p className="text-gray-300 text-sm leading-relaxed text-left">Professional mixing & production</p>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2 mb-3">
-                <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded-full text-xs font-medium">Song Production</span>
-                <span className="px-2 py-1 bg-gray-700/50 text-gray-300 rounded-full text-xs font-medium">Masl, Skyden</span>
-              </div>
-              <h3 className="text-lg font-bold text-green-400 mb-2">Astra Rakete</h3>
-              <p className="text-gray-300 mb-4 text-sm leading-relaxed">500,000+ listens on Spotify</p>
-              <a 
-                href="https://open.spotify.com/track/1SNt5TkIJhdgjkOD00ezP8?si=84d349faacc14c43" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="inline-flex items-center justify-center w-10 h-10 bg-green-500 hover:bg-green-600 rounded-full transition-colors duration-200 hover:scale-110 transform"
-                aria-label="Listen on Spotify"
-              >
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.84-.179-.959-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.361 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
-                </svg>
-              </a>
             </Card>
 
             {/* LionKloud */}
             <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
-              <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
-                <img 
-                  src="/images/studio-setup.jpg" 
-                  alt="LionKloud Album Cover" 
-                  className="w-full h-full object-cover"
-                />
+              {/* Spotify Embed replacing image */}
+              <div className="w-full mb-4">
+                <iframe 
+                  src="https://open.spotify.com/embed/track/6eYPukivyvDEoCiHrAz6Ld?utm_source=generator&theme=0" 
+                  width="100%" 
+                  height="152" 
+                  frameBorder="0" 
+                  allowFullScreen={true}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                  loading="lazy"
+                  className="rounded-lg opacity-95 hover:opacity-100 transition-opacity duration-200"
+                ></iframe>
               </div>
               <div className="flex flex-wrap gap-2 mb-3">
                 <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded-full text-xs font-medium">Song Production</span>
                 <span className="px-2 py-1 bg-gray-700/50 text-gray-300 rounded-full text-xs font-medium">LionKloud</span>
               </div>
-              <h3 className="text-lg font-bold text-green-400 mb-2">Harmony</h3>
-              <p className="text-gray-300 mb-4 text-sm leading-relaxed">Mastered for commercial release</p>
-              <a 
-                href="https://open.spotify.com/track/6eYPukivyvDEoCiHrAz6Ld" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="inline-flex items-center justify-center w-10 h-10 bg-green-500 hover:bg-green-600 rounded-full transition-colors duration-200 hover:scale-110 transform"
-                aria-label="Listen on Spotify"
-              >
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.84-.179-.959-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.361 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
-                </svg>
-              </a>
+              <div className="flex items-center gap-3 mb-2">
+                <a 
+                  href="https://open.spotify.com/track/6eYPukivyvDEoCiHrAz6Ld" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center justify-center w-8 h-8 bg-green-500 hover:bg-green-600 rounded-full transition-colors duration-200 hover:scale-110 transform flex-shrink-0"
+                  aria-label="Listen on Spotify"
+                >
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.84-.179-.959-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.361 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
+                  </svg>
+                </a>
+                <div className="text-left">
+                  <h3 className="text-lg font-bold text-green-400 text-left">Harmony</h3>
+                  <p className="text-gray-300 text-sm leading-relaxed text-left">Mastered for commercial release</p>
+                </div>
+              </div>
             </Card>
 
             {/* Gymnasium Wentorf Ad Video */}
@@ -344,11 +449,6 @@ export default function Home() {
               </div>
               <h3 className="text-lg font-bold text-green-400 mb-2">Summer Concert Promo</h3>
               <p className="text-gray-300 mb-4 text-sm leading-relaxed">Music production for promotional video in collaboration with Dingenskirchen agency</p>
-              <div className="inline-flex items-center justify-center w-10 h-10 bg-gray-600 rounded-full">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-              </div>
             </Card>
 
             {/* Wedding DJ */}
@@ -366,11 +466,6 @@ export default function Home() {
               </div>
               <h3 className="text-lg font-bold text-green-400 mb-2">Elegant Wedding</h3>
               <p className="text-gray-300 mb-4 text-sm leading-relaxed">150 guests • Complete sound & lighting setup • 8-hour performance</p>
-              <div className="inline-flex items-center justify-center w-10 h-10 bg-gray-600 rounded-full">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-              </div>
             </Card>
 
             {/* Nightclub DJ */}
@@ -388,11 +483,6 @@ export default function Home() {
               </div>
               <h3 className="text-lg font-bold text-green-400 mb-2">Saturday Night Set</h3>
               <p className="text-gray-300 mb-4 text-sm leading-relaxed">200+ guests • High-energy electronic set • Collaboration with Nicnames</p>
-              <div className="inline-flex items-center justify-center w-10 h-10 bg-gray-600 rounded-full">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-              </div>
             </Card>
 
             {/* Birthday Party DJ */}
@@ -410,12 +500,60 @@ export default function Home() {
               </div>
               <h3 className="text-lg font-bold text-green-400 mb-2">30th Birthday Celebration</h3>
               <p className="text-gray-300 mb-4 text-sm leading-relaxed">120 guests • Mixed genre playlist • Solo performance with full setup</p>
-              <div className="inline-flex items-center justify-center w-10 h-10 bg-gray-600 rounded-full">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-              </div>
             </Card>
+          </div>
+        </section>
+
+        {/* About Section */}
+        <section className="max-w-4xl mx-auto px-6 pb-20" id="about">
+          <h2 className="text-4xl font-bold text-white mb-12 text-center">About</h2>
+          
+          {/* Clean Layout with Single Music Inspiration */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            
+            {/* Left - About Text Part 1 */}
+            <div className="text-gray-200 leading-relaxed flex flex-col justify-center">
+              <p className="text-lg mb-4">
+                I'm <span className="text-green-400 font-semibold">Sebastian Petersen</span>, 24 years old and based in Hamburg, Germany. 
+                Music has been my life's passion since I took my first piano lesson at age 3, followed by violin at 5.
+              </p>
+              
+              <p className="text-lg">
+                Growing up with music teacher parents, I was surrounded by everything from classical masterpieces to contemporary sounds.
+              </p>
+            </div>
+
+            {/* Center - Musical Inspiration (Minimalistic) */}
+            <div className="bg-gray-900/70 border border-gray-700 rounded-2xl p-5 backdrop-blur-sm">
+              <h3 className="text-amber-400 font-semibold mb-3 text-center text-sm">My Inspiration</h3>
+              <iframe 
+                src="https://open.spotify.com/embed/track/2tUZnbP0VmFYYGQOWznpjf?utm_source=generator&theme=0" 
+                width="100%" 
+                height="80" 
+                frameBorder="0" 
+                allowFullScreen={true}
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                loading="lazy"
+                className="rounded-lg bg-gray-900"
+                style={{backgroundColor: '#111827'}}
+              ></iframe>
+              <p className="text-amber-300 text-xs mt-2 text-center italic">
+                One of my all-time favorites
+              </p>
+            </div>
+
+            {/* Right - About Text Part 2 */}
+            <div className="text-gray-200 leading-relaxed flex flex-col justify-center">
+              <p className="text-lg mb-4">
+                Ten years ago, I discovered electronic music production and found my true calling. This led me to formal education as an Audio Engineer at the <span className="text-green-400">SAE Institute in Hanover (2018-2021)</span>.
+              </p>
+              
+              <p className="text-lg">
+                Today, I'm living my dream – creating art through sound while bringing people together through music. 
+                <span className="text-green-300 block mt-2 font-medium">Every track tells a story, every mix builds a bridge.</span>
+              </p>
+            </div>
+
           </div>
         </section>
 
