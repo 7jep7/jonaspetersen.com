@@ -1,3 +1,4 @@
+// File deleted
 import { json } from "@remix-run/node";
 import { Link } from "@remix-run/react";
 import { Card } from "~/components/ui/card";

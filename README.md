@@ -1,33 +1,27 @@
-# Jonas Petersen - Portfolio Website
 
-> **Computational engineer with AI/robotics expertise. Building the data pipelines for shipping true robotic intelligence.**
+# Bass-T — Audio Engineer & Producer
 
-A modern, responsive portfolio website built with Remix, showcasing AI/robotics projects, startup experience, and technical expertise.
+Professional, clean, and modern portfolio website for Bass-T.
 
-## � Live Website
+**Services:**
+- Mixing
+- Mastering
+- Producing
+- Beatmaking
+- DJ Services
 
-**[jonaspetersen.com](https://jonaspetersen.com)**
+**For artists, advertisers, and event organizers.**
 
-## 🎯 About
+**Portfolio highlights:**
+- [Astra Rakete (Masl, Skyden)](https://open.spotify.com/track/1SNt5TkIJhdgjkOD00ezP8?si=84d349faacc14c43) — 500,000+ listens
+- [Tim River: Feel the tension](https://open.spotify.com/track/0DAc0jmbnfuUTaTqfmFnlL)
+- [LionKloud: Harmony](https://open.spotify.com/track/6eYPukivyvDEoCiHrAz6Ld)
+- [House of Amani: Uthando](https://open.spotify.com/track/5Whh2yubxjPKTxFZfctCzF?si=Ks82hqHRQii0PnuElOjeog)
 
-This portfolio showcases my journey as:
-- **AI/Robotics Engineer** with expertise in embodied AI and data pipelines
-- **Startup Co-founder** who scaled K2 AI to €500k revenue in <12 months
-- **Researcher** with published papers and hackathon wins
-- **Cambridge MPhil & Imperial MEng** graduate
+**Contact for professional audio projects.**
 
-## ✨ Features
-
-- **Modern Design**: Clean, professional dark theme with consistent orange branding
-- **Responsive Layout**: Optimized for desktop, tablet, and mobile
-- **Performance Optimized**: Built with Remix for fast server-side rendering
-- **Interactive Elements**: Smooth hover effects and transitions
-- **SEO Ready**: Comprehensive meta tags and social media optimization
-
-## 🛠️ Tech Stack
-
-- **Framework**: [Remix](https://remix.run/) - Full-stack web framework
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
+Spotify: [Bass-T](https://open.spotify.com/artist/40j4uphVTGSVb4EUtLbZ2l)
+YouTube: [@bass-t](https://www.youtube.com/@bass-t)
 - **UI Components**: [shadcn/ui](https://ui.shadcn.com/) - Reusable component library
 - **Icons**: [Lucide React](https://lucide.dev/) - Beautiful icon library
 - **Animations**: [Framer Motion](https://www.framer.com/motion/) - Production-ready animations

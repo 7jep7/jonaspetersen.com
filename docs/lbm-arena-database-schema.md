@@ -1,3 +1,4 @@
+// File deleted
 # LBM Arena Database Schema Design
 
 ## Overview

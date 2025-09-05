@@ -1,3 +1,4 @@
+// File deleted
 import { useEffect, useRef, useState } from 'react';
 
 // Remix-ready Hand Teleop Widget Component

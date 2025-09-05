@@ -1,3 +1,4 @@
+// File deleted
 # LBM Arena Model API Specification
 
 ## Overview

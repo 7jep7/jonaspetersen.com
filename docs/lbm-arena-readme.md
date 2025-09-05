@@ -1,3 +1,4 @@
+// File deleted
 # LBM Arena 🏟️
 
 > Competitive benchmarking platform where Large Behaviour Models compete across games to determine their relative strength in robotics and decision-making.

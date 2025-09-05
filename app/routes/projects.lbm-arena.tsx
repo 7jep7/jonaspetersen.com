@@ -1,3 +1,4 @@
+// File deleted
 import { useState } from 'react';
 import { json, type LoaderFunctionArgs, type MetaFunction } from '@remix-run/node';
 import { Badge } from '~/components/ui/badge';
