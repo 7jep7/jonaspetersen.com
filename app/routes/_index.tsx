@@ -220,7 +220,7 @@ export default function Home() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             
             {/* House of Amani - Featured */}
-            <Card className="md:col-span-2 lg:col-span-1 bg-gradient-to-br from-gray-900/80 to-gray-800/60 border-green-500/30 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300 ring-1 ring-green-500/20">
+            <Card className="md:col-span-2 lg:col-span-1 border-green-500/30 p-6 overflow-hidden backdrop-blur-sm transition-all duration-300 ring-1 ring-green-500/20" style={{backgroundColor: '#111827'}}>
               {/* Spotify Embed replacing image */}
               <div className="w-full mb-4">
                 <iframe 
@@ -266,7 +266,7 @@ export default function Home() {
             </Card>
 
             {/* House of Amani - My Soul */}
-            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+            <Card className="border-gray-700 p-6 overflow-hidden backdrop-blur-sm transition-all duration-300" style={{backgroundColor: '#111827'}}>
               {/* Spotify Embed replacing image */}
               <div className="w-full mb-4">
                 <iframe 
@@ -312,7 +312,7 @@ export default function Home() {
             </Card>
 
             {/* Astra Rakete */}
-            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+            <Card className="border-gray-700 p-6 overflow-hidden backdrop-blur-sm transition-all duration-300" style={{backgroundColor: '#111827'}}>
               {/* Spotify Embed replacing image */}
               <div className="w-full mb-4">
                 <iframe 
@@ -351,7 +351,7 @@ export default function Home() {
             </Card>
 
             {/* Tim River */}
-            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+            <Card className="border-gray-700 p-6 overflow-hidden backdrop-blur-sm transition-all duration-300" style={{backgroundColor: '#111827'}}>
               {/* Spotify Embed replacing image */}
               <div className="w-full mb-4">
                 <iframe 
@@ -397,7 +397,7 @@ export default function Home() {
             </Card>
 
             {/* LionKloud */}
-            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+            <Card className="border-gray-700 p-6 overflow-hidden backdrop-blur-sm transition-all duration-300" style={{backgroundColor: '#111827'}}>
               {/* Spotify Embed replacing image */}
               <div className="w-full mb-4">
                 <iframe 
@@ -408,7 +408,8 @@ export default function Home() {
                   allowFullScreen={true}
                   allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
                   loading="lazy"
-                  className="rounded-lg opacity-95 hover:opacity-100 transition-opacity duration-200"
+                  className="rounded-lg opacity-95 hover:opacity-100 transition-opacity duration-200 bg-gray-900"
+                  style={{backgroundColor: '#111827'}}
                 ></iframe>
               </div>
               <div className="flex flex-wrap gap-2 mb-3">
@@ -435,7 +436,7 @@ export default function Home() {
             </Card>
 
             {/* Gymnasium Wentorf Ad Video */}
-            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+            <Card className="border-gray-700 p-6 overflow-hidden backdrop-blur-sm transition-all duration-300" style={{backgroundColor: '#111827'}}>
               <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
                 <img 
                   src="/images/ad-video-production.jpg" 
@@ -452,7 +453,7 @@ export default function Home() {
             </Card>
 
             {/* Wedding DJ */}
-            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+            <Card className="border-gray-700 p-6 overflow-hidden backdrop-blur-sm transition-all duration-300" style={{backgroundColor: '#111827'}}>
               <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
                 <img 
                   src="/images/wedding-dj.jpg" 
@@ -469,7 +470,7 @@ export default function Home() {
             </Card>
 
             {/* Nightclub DJ */}
-            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+            <Card className="border-gray-700 p-6 overflow-hidden backdrop-blur-sm transition-all duration-300" style={{backgroundColor: '#111827'}}>
               <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
                 <img 
                   src="/images/nightclub-dj.jpg" 
@@ -486,7 +487,7 @@ export default function Home() {
             </Card>
 
             {/* Birthday Party DJ */}
-            <Card className="bg-gray-900/70 border-gray-700 p-6 overflow-hidden backdrop-blur-sm hover:bg-gray-900/90 transition-all duration-300">
+            <Card className="border-gray-700 p-6 overflow-hidden backdrop-blur-sm transition-all duration-300" style={{backgroundColor: '#111827'}}>
               <div className="w-full h-40 mb-4 rounded-lg overflow-hidden">
                 <img 
                   src="/images/birthday-party-dj.jpg" 
@@ -508,52 +509,45 @@ export default function Home() {
         <section className="max-w-4xl mx-auto px-6 pb-20" id="about">
           <h2 className="text-4xl font-bold text-white mb-12 text-center">About</h2>
           
-          {/* Clean Layout with Single Music Inspiration */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          {/* Text Above Iframe */}
+          <div className="text-gray-200 leading-relaxed text-center mb-8">
+            <p className="text-lg mb-6">
+              I'm <span className="text-green-400 font-semibold">Sebastian Petersen</span>, 24 years old and based in Hamburg, Germany. 
+              Music has been my life's passion since I took my first piano lesson at age 3, followed by violin at 5.
+            </p>
             
-            {/* Left - About Text Part 1 */}
-            <div className="text-gray-200 leading-relaxed flex flex-col justify-center">
-              <p className="text-lg mb-4">
-                I'm <span className="text-green-400 font-semibold">Sebastian Petersen</span>, 24 years old and based in Hamburg, Germany. 
-                Music has been my life's passion since I took my first piano lesson at age 3, followed by violin at 5.
-              </p>
-              
-              <p className="text-lg">
-                Growing up with music teacher parents, I was surrounded by everything from classical masterpieces to contemporary sounds.
-              </p>
-            </div>
+            <p className="text-lg mb-6">
+              Growing up with music teacher parents, I was surrounded by everything from classical masterpieces to contemporary sounds.
+              Ten years ago, I discovered electronic music production and found my true calling. The piece below perfectly captures the balance of technical mastery and emotional depth that inspires my approach to audio engineering.
+            </p>
+          </div>
 
-            {/* Center - Musical Inspiration (Minimalistic) */}
-            <div className="bg-gray-900/70 border border-gray-700 rounded-2xl p-5 backdrop-blur-sm">
-              <h3 className="text-amber-400 font-semibold mb-3 text-center text-sm">My Inspiration</h3>
-              <iframe 
-                src="https://open.spotify.com/embed/track/2tUZnbP0VmFYYGQOWznpjf?utm_source=generator&theme=0" 
-                width="100%" 
-                height="80" 
-                frameBorder="0" 
-                allowFullScreen={true}
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
-                loading="lazy"
-                className="rounded-lg bg-gray-900"
-                style={{backgroundColor: '#111827'}}
-              ></iframe>
-              <p className="text-amber-300 text-xs mt-2 text-center italic">
-                One of my all-time favorites
-              </p>
-            </div>
+          {/* Full-Width Musical Inspiration */}
+          <div className="border border-gray-700 rounded-2xl p-6 mb-8 backdrop-blur-sm" style={{backgroundColor: '#111827'}}>
+            <iframe 
+              src="https://open.spotify.com/embed/track/2tUZnbP0VmFYYGQOWznpjf?utm_source=generator&theme=0" 
+              width="100%" 
+              height="152" 
+              frameBorder="0" 
+              allowFullScreen={true}
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+              loading="lazy"
+              className="rounded-lg"
+              style={{backgroundColor: '#111827'}}
+            ></iframe>
+          </div>
 
-            {/* Right - About Text Part 2 */}
-            <div className="text-gray-200 leading-relaxed flex flex-col justify-center">
-              <p className="text-lg mb-4">
-                Ten years ago, I discovered electronic music production and found my true calling. This led me to formal education as an Audio Engineer at the <span className="text-green-400">SAE Institute in Hanover (2018-2021)</span>.
-              </p>
-              
-              <p className="text-lg">
-                Today, I'm living my dream – creating art through sound while bringing people together through music. 
-                <span className="text-green-300 block mt-2 font-medium">Every track tells a story, every mix builds a bridge.</span>
-              </p>
-            </div>
-
+          {/* Text Below Iframe */}
+          <div className="text-gray-200 leading-relaxed text-center">
+            <p className="text-lg mb-6">
+              This led me to formal education as an Audio Engineer at the <span className="text-green-400">SAE Institute in Hanover (2018-2021)</span>,
+              where I refined my technical skills and deepened my understanding of sound design.
+            </p>
+            
+            <p className="text-lg">
+              Today, I'm living my dream – creating art through sound while bringing people together through music. 
+              <span className="text-green-300 block mt-4 font-medium text-xl">Every track tells a story, every mix builds a bridge.</span>
+            </p>
           </div>
         </section>
 
