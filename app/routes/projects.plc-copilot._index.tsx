@@ -1,0 +1,257 @@
+import { useState, useRef, useEffect } from "react";
+import { Link } from "@remix-run/react";
+import { Send, Plus, Settings, MessageSquare, Paperclip, X } from "lucide-react";
+
+interface Message {
+  id: string;
+  content: string;
+  role: "user" | "assistant";
+  timestamp: Date;
+}
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+}
+
+export default function PLCCopilotIndex() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: input.trim(),
+      role: "user",
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+
+    // Simulate API response
+    setTimeout(() => {
+      const fileContext = uploadedFiles.length > 0 
+        ? ` I can see you've uploaded ${uploadedFiles.length} file(s): ${uploadedFiles.map(f => f.name).join(', ')}.`
+        : '';
+      
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `I understand you're asking about: "${userMessage.content}".${fileContext} This is a PLC Copilot simulation. In a real implementation, this would connect to your PLC system and provide intelligent assistance for automation tasks.`,
+        role: "assistant",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+      setIsLoading(false);
+      setUploadedFiles([]); // Clear files after sending
+    }, 1000);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach(file => {
+      const uploadedFile: UploadedFile = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        name: file.name,
+        size: file.size,
+        type: file.type
+      };
+      setUploadedFiles(prev => [...prev, uploadedFile]);
+    });
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+      {/* Header */}
+      <header className="border-b border-gray-800 px-6 py-4">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+              <MessageSquare className="w-5 h-5 text-white" />
+            </div>
+            <h1 className="text-xl font-semibold">PLC Copilot</h1>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
+              <Plus className="w-5 h-5" />
+            </button>
+            <Link 
+              to="/projects/plc-copilot/session"
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            >
+              <Settings className="w-5 h-5" />
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Chat Area */}
+      <main className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
+        {/* Uploaded Files */}
+        {uploadedFiles.length > 0 && (
+          <div className="border-b border-gray-800 px-6 py-3">
+            <div className="flex flex-wrap gap-2">
+              {uploadedFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 flex items-center gap-2 text-sm"
+                >
+                  <span className="text-white truncate max-w-32">{file.name}</span>
+                  <span className="text-gray-400">({formatFileSize(file.size)})</span>
+                  <button
+                    onClick={() => removeFile(file.id)}
+                    className="text-gray-400 hover:text-red-400 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-6 py-8">
+          {messages.length === 0 ? (
+            <div className="text-center text-gray-400 mt-20">
+              <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="w-8 h-8 text-orange-500" />
+              </div>
+              <h2 className="text-xl font-medium text-white mb-2">Welcome to PLC Copilot</h2>
+              <p className="text-sm">Your intelligent assistant for PLC programming and automation tasks.</p>
+              <p className="text-sm mt-2">Ask questions about ladder logic, function blocks, or troubleshooting.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                      message.role === "user"
+                        ? "bg-orange-500 text-white"
+                        : "bg-gray-800 text-gray-100"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <time className="text-xs opacity-70 mt-1 block">
+                      {message.timestamp.toLocaleTimeString()}
+                    </time>
+                  </div>
+                </div>
+              ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-800 rounded-lg px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
+                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input Area */}
+        <div className="border-t border-gray-800 p-6">
+          <form onSubmit={handleSubmit} className="relative">
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask about PLC programming, ladder logic, or automation..."
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-24 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400"
+                rows={1}
+                style={{ minHeight: "48px", maxHeight: "120px" }}
+              />
+              
+              {/* Attachment button */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileUpload}
+                accept=".txt,.pdf,.doc,.docx,.xls,.xlsx,.csv,.json,.xml,.plc,.l5x"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute right-12 top-1/2 transform -translate-y-1/2 p-2 text-gray-400 hover:text-orange-500 transition-colors"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+              
+              {/* Send button */}
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
+          
+          <p className="text-xs text-gray-500 mt-2 text-center">
+            Press Enter to send, Shift+Enter for new line
+          </p>
+        </div>
+      </main>
+    </div>
+  );
+}
