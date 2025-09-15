@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "@remix-run/react";
 import { Send, Plus, Settings, MessageSquare, Paperclip, X } from "lucide-react";
+import { ConnectionStatus } from "~/components/ConnectionStatus";
 
 interface Message {
   id: string;
@@ -110,7 +111,10 @@ export default function PLCCopilotIndex() {
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
               <MessageSquare className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-xl font-semibold">PLC Copilot</h1>
+            <div>
+              <h1 className="text-xl font-semibold">PLC Copilot</h1>
+              <ConnectionStatus className="mt-1" />
+            </div>
           </div>
           
           <div className="flex items-center gap-2">

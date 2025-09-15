@@ -10,6 +10,8 @@ import {
   Box,
   ArrowLeft 
 } from "lucide-react";
+import { apiClient, type ChatResponse } from "~/lib/api-client";
+import { ConnectionStatus, ErrorMessage } from "~/components/ConnectionStatus";
 
 interface Message {
   id: string;
@@ -42,18 +44,14 @@ export default function PLCCopilotProject() {
         role: "user",
         timestamp: new Date(Date.now() - 2000)
       });
-      msgs.push({
-        id: "2", 
-        content: "I'll help you create that PLC solution. Let me analyze your requirements and generate the appropriate code. This structured text implementation will include all necessary safety interlocks and control logic.",
-        role: "assistant",
-        timestamp: new Date(Date.now() - 1000)
-      });
     }
     return msgs;
   });
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeView, setActiveView] = useState<OutputView>("structured-text");
+  const [initialApiCall, setInitialApiCall] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -64,6 +62,40 @@ export default function PLCCopilotProject() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Handle initial API call when component mounts with a prompt
+  useEffect(() => {
+    if (initialPrompt && !initialApiCall) {
+      setInitialApiCall(true);
+      setIsLoading(true);
+      
+      apiClient.chat({
+        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. The user just asked: "${initialPrompt}". Please provide a helpful, detailed response about their PLC programming question or request.`,
+        model: "gpt-4o-mini",
+        temperature: 0.7,
+        max_completion_tokens: 1024
+      }).then(response => {
+        const assistantMessage: Message = {
+          id: "2",
+          content: response.content,
+          role: "assistant",
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      }).catch(error => {
+        console.error('Initial API call failed:', error);
+        const fallbackMessage: Message = {
+          id: "2",
+          content: "I'll help you create that PLC solution. Let me analyze your requirements and generate the appropriate code. This structured text implementation will include all necessary safety interlocks and control logic.",
+          role: "assistant",
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, fallbackMessage]);
+      }).finally(() => {
+        setIsLoading(false);
+      });
+    }
+  }, [initialPrompt, initialApiCall]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,18 +111,40 @@ export default function PLCCopilotProject() {
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    setLastError(null);
 
-    // Simulate API response
-    setTimeout(() => {
+    try {
+      // Call the real API
+      const response: ChatResponse = await apiClient.chat({
+        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
+        model: "gpt-4o-mini",
+        temperature: 0.7,
+        max_completion_tokens: 1024
+      });
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: "I understand your request. Let me update the code and provide additional insights based on your input.",
+        content: response.content,
         role: "assistant",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('API call failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setLastError(errorMessage);
+      
+      // Fallback message on error
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "I'm having trouble connecting to the backend right now. Please check your connection or try again later. In the meantime, I can help you with general PLC programming guidance.",
+        role: "assistant",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -199,7 +253,10 @@ END_PROGRAM`}
               </div>
               <div>
                 <h1 className="text-xl font-semibold">PLC Copilot</h1>
-                <p className="text-sm text-gray-400">Session {sessionId || 'new'}</p>
+                <div className="flex items-center gap-3">
+                  <p className="text-sm text-gray-400">Session {sessionId || 'new'}</p>
+                  <ConnectionStatus />
+                </div>
               </div>
             </div>
           </div>
@@ -244,6 +301,13 @@ END_PROGRAM`}
                 </div>
               )}
             </div>
+            {lastError && (
+              <ErrorMessage 
+                error={lastError} 
+                onRetry={() => setLastError(null)}
+                className="mx-4 mb-2" 
+              />
+            )}
             <div ref={messagesEndRef} />
           </div>
 
