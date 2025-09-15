@@ -66,6 +66,7 @@ export default function PLCCopilotProject() {
   // Handle initial API call when component mounts with a prompt
   useEffect(() => {
     if (initialPrompt && !initialApiCall) {
+      console.log('Making initial API call for prompt:', initialPrompt);
       setInitialApiCall(true);
       setIsLoading(true);
       
@@ -75,6 +76,7 @@ export default function PLCCopilotProject() {
         temperature: 0.7,
         max_completion_tokens: 1024
       }).then(response => {
+        console.log('Initial API response received');
         const assistantMessage: Message = {
           id: "2",
           content: response.content,
@@ -99,7 +101,17 @@ export default function PLCCopilotProject() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('handleSubmit called with input:', input, 'isLoading:', isLoading);
+    
     if (!input.trim() || isLoading) return;
+
+    // Prevent duplicate API calls if we're still processing the initial prompt
+    if (initialPrompt && !initialApiCall) {
+      console.log('Skipping handleSubmit - initial API call not completed yet');
+      return;
+    }
+
+    console.log('Processing user message:', input.trim());
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -122,6 +134,7 @@ export default function PLCCopilotProject() {
         max_completion_tokens: 1024
       });
 
+      console.log('handleSubmit API response received');
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response.content,
