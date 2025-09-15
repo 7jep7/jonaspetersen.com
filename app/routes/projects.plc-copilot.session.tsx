@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@remix-run/react";
-import { ArrowLeft, MessageSquare, Trash2, Plus, Calendar, Clock } from "lucide-react";
+import { ArrowLeft, MessageSquare, Trash2, Plus, Calendar, Clock, ExternalLink } from "lucide-react";
 
 interface Session {
   id: string;
@@ -8,30 +8,34 @@ interface Session {
   lastMessage: string;
   timestamp: Date;
   messageCount: number;
+  preview?: string;
 }
 
 export default function PLCCopilotSession() {
   const [sessions, setSessions] = useState<Session[]>([
     {
-      id: "1",
-      name: "Ladder Logic Debugging",
-      lastMessage: "How do I troubleshoot a timer that's not working?",
+      id: "1703123456789",
+      name: "Conveyor Belt Control",
+      lastMessage: "How do I create a simple conveyor belt control system?",
       timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-      messageCount: 8
+      messageCount: 8,
+      preview: "PROGRAM ConveyorControl..."
     },
     {
-      id: "2", 
-      name: "Function Block Programming",
-      lastMessage: "Can you explain how to create custom function blocks?",
+      id: "1703123456788", 
+      name: "Safety System Design",
+      lastMessage: "Can you help me design an emergency stop system?",
       timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-      messageCount: 15
+      messageCount: 15,
+      preview: "VAR bEmergencyStop : BOOL..."
     },
     {
-      id: "3",
-      name: "HMI Integration",
-      lastMessage: "Setting up communication between PLC and HMI",
+      id: "1703123456787",
+      name: "PID Temperature Control",
+      lastMessage: "Setting up PID control for oven temperature",
       timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-      messageCount: 23
+      messageCount: 23,
+      preview: "FUNCTION_BLOCK FB_PID..."
     }
   ]);
 
@@ -55,7 +59,7 @@ export default function PLCCopilotSession() {
   const createNewSession = () => {
     const newSession: Session = {
       id: Date.now().toString(),
-      name: "New Session",
+      name: "New Project",
       lastMessage: "",
       timestamp: new Date(),
       messageCount: 0
@@ -148,16 +152,29 @@ export default function PLCCopilotSession() {
               {sessions.map((session) => (
                 <div
                   key={session.id}
-                  className={`bg-gray-800 border rounded-lg p-4 hover:bg-gray-750 transition-colors cursor-pointer ${
+                  className={`bg-gray-800 border rounded-lg p-4 hover:bg-gray-750 transition-colors ${
                     selectedSessions.has(session.id) ? 'ring-2 ring-orange-500 border-orange-500' : 'border-gray-700'
                   }`}
-                  onClick={() => handleSelectSession(session.id)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <h3 className="font-medium text-white mb-1">{session.name}</h3>
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-medium text-white">{session.name}</h3>
+                        <Link
+                          to={`/projects/plc-copilot/project/${session.id}`}
+                          className="p-1 text-gray-400 hover:text-orange-500 transition-colors"
+                          title="Open project"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Link>
+                      </div>
                       {session.lastMessage && (
                         <p className="text-gray-400 text-sm mb-2 line-clamp-2">{session.lastMessage}</p>
+                      )}
+                      {session.preview && (
+                        <div className="bg-gray-900 rounded px-2 py-1 mb-2">
+                          <code className="text-gray-400 text-xs">{session.preview}</code>
+                        </div>
                       )}
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <div className="flex items-center gap-1">
