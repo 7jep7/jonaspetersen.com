@@ -405,6 +405,28 @@ export default function PLCCopilotProject() {
     console.log(`Stage transition: ${currentStage} -> ${newStage}`, reason);
   };
 
+  // Handle skip to code button - sends a message and transitions stage
+  const handleSkipToCode = async () => {
+    if (isLoading || apiCallInProgress) return; // Prevent if already processing
+    
+    const skipMessage: Message = {
+      id: Date.now().toString(),
+      content: "Generate Structured Text for a PLC now.",
+      role: "user",
+      timestamp: new Date(),
+      hasFiles: false
+    };
+
+    // Add the message to UI first
+    setMessages(prev => [...prev, skipMessage]);
+    
+    // Transition to code generation stage
+    handleStageTransition('code_generation', 'User clicked Skip to Code button');
+    
+    // Send the message to get LLM response
+    await sendMessage(skipMessage);
+  };
+
   const removeFile = (fileId: string) => {
     setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
     setSelectedFileId((current) => (current === fileId ? null : current));
@@ -610,8 +632,9 @@ END_PROGRAM`}
                 {currentStage === 'gather_requirements' && (
                   <Button
                     size="sm"
-                    onClick={() => handleStageTransition('code_generation', 'User requested to skip to code generation')}
-                    className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 ml-3 bg-transparent"
+                    onClick={handleSkipToCode}
+                    disabled={isLoading || apiCallInProgress}
+                    className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 ml-3 bg-transparent disabled:opacity-50"
                   >
                     <SkipForward className="w-3 h-3 mr-1 text-gray-400" />
                     <span className="align-middle">Skip to Code</span>

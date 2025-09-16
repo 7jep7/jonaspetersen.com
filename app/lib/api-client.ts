@@ -1,6 +1,9 @@
 // API client for PLC Copilot backend
 // Supports both localhost (development) and production (render.com) endpoints
 
+// Testing mode - set to true to enable localhost health checks in development
+const ENABLE_LOCALHOST_TESTING = false;
+
 interface ChatRequest {
   user_prompt: string;
   model?: string;
@@ -39,8 +42,8 @@ class PLCCopilotApiClient {
   private lastWorkingPort: string | null = null;
   
   constructor() {
-    // Set initial URL - will be refined by auto-detection
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    // Set initial URL - will be refined by auto-detection only if testing mode is enabled
+    if (ENABLE_LOCALHOST_TESTING && typeof window !== 'undefined' && window.location.hostname === 'localhost') {
       // Start with the last working port or first in list
       const preferredPort = this.lastWorkingPort || this.developmentPorts[0];
       this.baseUrl = `http://localhost:${preferredPort}`;
@@ -49,10 +52,10 @@ class PLCCopilotApiClient {
     }
   }
 
-  // Auto-detect working development port
+  // Auto-detect working development port (only if testing mode enabled)
   private async findWorkingPort(): Promise<string> {
-    if (typeof window === 'undefined' || window.location.hostname !== 'localhost') {
-      return this.baseUrl;
+    if (!ENABLE_LOCALHOST_TESTING || typeof window === 'undefined' || window.location.hostname !== 'localhost') {
+      return 'https://plc-copilot.onrender.com';
     }
 
     // If we have a cached working port, try it first
