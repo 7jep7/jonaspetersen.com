@@ -37,8 +37,11 @@ export function ConnectionStatus({ className = "" }: ConnectionStatusProps) {
   if (isConnected === null) {
     return (
       <div className={`flex items-center gap-2 text-gray-400 ${className}`}>
-        <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
-        <span className="text-xs">Checking connection...</span>
+        <div 
+          className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"
+          title="Checking connection..."
+        ></div>
+        <span className="text-xs hidden sm:inline">Checking connection...</span>
       </div>
     );
   }
@@ -47,17 +50,21 @@ export function ConnectionStatus({ className = "" }: ConnectionStatusProps) {
     <div className={`flex items-center gap-2 ${className}`}>
       {isConnected ? (
         <>
-          <Wifi className="w-3 h-3 text-green-500" />
-          <span className="text-xs text-green-500">Connected to {currentUrl || 'backend'}</span>
+          <div title={`Connected to ${currentUrl || 'backend'}`}>
+            <Wifi className="w-3 h-3 text-green-500" />
+          </div>
+          <span className="text-xs text-green-500 hidden sm:inline">Connected to {currentUrl || 'backend'}</span>
         </>
       ) : (
         <>
-          <WifiOff className="w-3 h-3 text-red-500" />
-          <span className="text-xs text-red-500">Backend offline</span>
+          <div title="Backend offline">
+            <WifiOff className="w-3 h-3 text-red-500" />
+          </div>
+          <span className="text-xs text-red-500 hidden sm:inline">Backend offline</span>
           <button
             onClick={checkConnection}
             disabled={isChecking}
-            className="text-xs text-orange-500 hover:text-orange-400 underline disabled:opacity-50"
+            className="text-xs text-orange-500 hover:text-orange-400 underline disabled:opacity-50 hidden sm:inline"
           >
             {isChecking ? "Checking..." : "Retry"}
           </button>
