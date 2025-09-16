@@ -74,6 +74,9 @@ export default function PLCCopilotIndex() {
     const isMobile = window.innerWidth < 1024; // lg breakpoint
     
     if (isMobile) {
+      // Clear input and files immediately on mobile
+      setInput("");
+      setUploadedFiles([]);
       // Navigate immediately on mobile
       navigate(`/projects/plc-copilot/project/${sessionId}?prompt=${encodeURIComponent(input.trim())}`);
     } else {
@@ -88,6 +91,10 @@ export default function PLCCopilotIndex() {
         timestamp: new Date()
       };
       setMessages([userMessage]);
+
+      // Clear input and files for the transition
+      setInput("");
+      setUploadedFiles([]);
 
       // Wait for animation to complete, then navigate
       setTimeout(() => {
