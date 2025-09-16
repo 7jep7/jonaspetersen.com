@@ -90,6 +90,42 @@ export default function PLCCopilotProject() {
         return 'focus=general';
     }
   };
+
+  // Very small heuristic to parse an MCQ out of assistant content
+  const parseMCQ = (text: string) => {
+    // look for lines that start with A), 1), -, or similar after a header like 'Options' or 'Choices'
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    // try to find a block that looks like options
+    const optionLines: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (/^(options|choices)[:]?$/i.test(l)) {
+        // take subsequent lines until a blank or non-option
+        for (let j = i+1; j < lines.length; j++) {
+          const candidate = lines[j];
+          if (/^([A-Z]\)|\d\.|-|•)\s*/.test(candidate)) {
+            optionLines.push(candidate.replace(/^([A-Z]\)|\d\.|-|•)\s*/, '').trim());
+          } else if (/^[A-Z]\)\s*/.test(candidate)) {
+            optionLines.push(candidate.replace(/^[A-Z]\)\s*/, '').trim());
+          } else {
+            break;
+          }
+        }
+        break;
+      }
+    }
+
+    // fallback: detect if first few lines look like 'A) ...' or '1. ...'
+    if (optionLines.length === 0) {
+      for (let i = 0; i < Math.min(lines.length, 12); i++) {
+        const m = lines[i].match(/^([A-Z]|\d+)[\)\.]\s+(.*)$/);
+        if (m) optionLines.push(m[2].trim());
+      }
+    }
+
+    if (optionLines.length >= 2) return optionLines;
+    return null;
+  };
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
   const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
   
@@ -198,6 +234,12 @@ export default function PLCCopilotProject() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Check if response contains MCQ and log options
+      const mcqOptions = parseMCQ(response.content);
+      if (mcqOptions && mcqOptions.length > 0) {
+        logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+      }
     } catch (error) {
       console.error('API call failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -259,6 +301,12 @@ export default function PLCCopilotProject() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Check if response contains MCQ and log options
+      const mcqOptions = parseMCQ(response.content);
+      if (mcqOptions && mcqOptions.length > 0) {
+        logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+      }
     } catch (error) {
       console.error('API call failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
