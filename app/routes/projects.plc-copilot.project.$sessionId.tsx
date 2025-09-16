@@ -72,6 +72,24 @@ export default function PLCCopilotProject() {
   const logTerminal = (line: string) => {
     setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
   };
+
+  // Return a very concise description of how the current stage modifies the prompt
+  const buildPromptModifier = (stage: typeof currentStage) => {
+    switch (stage) {
+      case 'project_kickoff':
+        return 'focus=high-level goals, constraints';
+      case 'gather_requirements':
+        return 'focus=ask clarifying Qs, gather IO, constraints';
+      case 'code_generation':
+        return 'focus=produce ST/FBD/SFC artifacts, include types';
+      case 'refinement_testing':
+        return 'focus=test-cases, optimize, fix issues';
+      case 'completed':
+        return 'focus=final checks, documentation';
+      default:
+        return 'focus=general';
+    }
+  };
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
   const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
   
@@ -162,7 +180,7 @@ export default function PLCCopilotProject() {
 
     try {
       // Log outgoing LLM request (concise)
-      logTerminal(`SEND LLM -> model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
+  logTerminal(`SEND LLM [${currentStage}] -> ${buildPromptModifier(currentStage)} model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
       // Call the real API - works for both initial and follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
@@ -223,7 +241,7 @@ export default function PLCCopilotProject() {
 
     try {
       // Log outgoing LLM request for submitted input
-      logTerminal(`SEND LLM -> model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
+  logTerminal(`SEND LLM [${currentStage}] -> ${buildPromptModifier(currentStage)} model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
       // Call the real API - works for both initial and follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
