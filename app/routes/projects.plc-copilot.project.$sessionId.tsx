@@ -8,6 +8,7 @@ import {
   List, 
   Network, 
   Box,
+  Terminal,
   X,
   Paperclip,
   ArrowLeft,
@@ -35,7 +36,7 @@ interface UploadedFile {
   content?: string | null;
 }
 
-type OutputView = "chat" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin";
+type OutputView = "chat" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin" | "terminal";
 
 const outputViews = [
   { id: "structured-text" as OutputView, icon: FileText, name: "Structured Text", shortName: "ST", description: "IEC 61131-3 Structured Text programming language" },
@@ -43,6 +44,7 @@ const outputViews = [
   { id: "sequential-chart" as OutputView, icon: List, name: "Sequential Function Chart", shortName: "SFC", description: "Sequential control flow programming" },
   { id: "signal-mapping" as OutputView, icon: Network, name: "Signal Mapping", shortName: "MAP", description: "Input/output signal assignments" },
   { id: "digital-twin" as OutputView, icon: Box, name: "Digital Twin", shortName: "DT", description: "3D visualization and simulation" }
+  ,{ id: "terminal" as OutputView, icon: Terminal, name: "Terminal", shortName: "T", description: "Copilot logs, errors, warnings" }
 ];
 
 export default function PLCCopilotProject() {
@@ -65,6 +67,11 @@ export default function PLCCopilotProject() {
   const [initialApiCall, setInitialApiCall] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+
+  const logTerminal = (line: string) => {
+    setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
+  };
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
   const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
   
@@ -101,6 +108,13 @@ export default function PLCCopilotProject() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Append lastError into terminal logs for quick visibility
+  useEffect(() => {
+    if (lastError) {
+      setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ERROR: ${lastError}`]);
+    }
+  }, [lastError]);
 
   // Set initial input from URL prompt if input is empty
   useEffect(() => {
@@ -147,6 +161,8 @@ export default function PLCCopilotProject() {
     setLastError(null);
 
     try {
+      // Log outgoing LLM request (concise)
+      logTerminal(`SEND LLM -> model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
       // Call the real API - works for both initial and follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
@@ -155,6 +171,8 @@ export default function PLCCopilotProject() {
         max_completion_tokens: 1024
       });
 
+      // Log brief response summary
+      logTerminal(`RECV LLM <- length=${response.content.length}`);
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response.content,
@@ -204,6 +222,8 @@ export default function PLCCopilotProject() {
     setLastError(null);
 
     try {
+      // Log outgoing LLM request for submitted input
+      logTerminal(`SEND LLM -> model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
       // Call the real API - works for both initial and follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
@@ -211,6 +231,8 @@ export default function PLCCopilotProject() {
         temperature: 0.7,
         max_completion_tokens: 1024
       });
+
+      logTerminal(`RECV LLM <- length=${response.content.length}`);
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -310,6 +332,8 @@ export default function PLCCopilotProject() {
 
   // Handle stage transitions for the conversation flow
   const handleStageTransition = (newStage: typeof currentStage, reason?: string) => {
+    // Log the stage transition succinctly and then perform it
+    logTerminal(`STAGE: ${currentStage} -> ${newStage}${reason ? ` (${reason})` : ''}`);
     setCurrentStage(newStage);
     // Here you could add API calls to update the backend stage
     console.log(`Stage transition: ${currentStage} -> ${newStage}`, reason);
@@ -410,6 +434,40 @@ qStatusLight := bMotorRunning;
 END_PROGRAM`}
                 </pre>
               </div>
+            </div>
+          </div>
+        );
+      case "terminal":
+        return (
+          <div className="h-full p-6 flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <Terminal className="w-5 h-5 text-orange-500" />
+                <h2 className="text-sm font-semibold">Copilot Terminal</h2>
+                <p className="text-xs text-gray-400">Logs, errors and warnings</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(terminalLogs.join('\n')); }}
+                  className="text-xs text-gray-300 hover:text-white px-2 py-1 border border-gray-800 rounded bg-gray-900"
+                >
+                  Copy
+                </button>
+                <button
+                  onClick={() => setTerminalLogs([])}
+                  className="text-xs text-gray-300 hover:text-white px-2 py-1 border border-gray-800 rounded bg-gray-900"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-black bg-opacity-60 rounded-lg border border-gray-800 font-mono text-sm overflow-y-auto p-4">
+              {terminalLogs.length === 0 ? (
+                <div className="text-gray-500">No logs yet. Errors and warnings will appear here.</div>
+              ) : (
+                <pre className="text-gray-200 whitespace-pre-wrap">{terminalLogs.join('\n')}</pre>
+              )}
             </div>
           </div>
         );
