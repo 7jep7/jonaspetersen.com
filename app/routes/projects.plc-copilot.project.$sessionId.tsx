@@ -8,12 +8,16 @@ import {
   List, 
   Network, 
   Box,
+  Terminal,
   X,
   Paperclip,
-  ArrowLeft 
+  ArrowLeft,
+  SkipForward
 } from "lucide-react";
 import { apiClient, type ChatResponse } from "~/lib/api-client";
 import { ConnectionStatus, ErrorMessage } from "~/components/ConnectionStatus";
+import { StageIndicator } from "~/components/StageIndicator";
+import { Button } from "~/components/ui/button";
 
 interface Message {
   id: string;
@@ -32,7 +36,7 @@ interface UploadedFile {
   content?: string | null;
 }
 
-type OutputView = "chat" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin";
+type OutputView = "chat" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin" | "terminal";
 
 const outputViews = [
   { id: "structured-text" as OutputView, icon: FileText, name: "Structured Text", shortName: "ST", description: "IEC 61131-3 Structured Text programming language" },
@@ -40,6 +44,7 @@ const outputViews = [
   { id: "sequential-chart" as OutputView, icon: List, name: "Sequential Function Chart", shortName: "SFC", description: "Sequential control flow programming" },
   { id: "signal-mapping" as OutputView, icon: Network, name: "Signal Mapping", shortName: "MAP", description: "Input/output signal assignments" },
   { id: "digital-twin" as OutputView, icon: Box, name: "Digital Twin", shortName: "DT", description: "3D visualization and simulation" }
+  ,{ id: "terminal" as OutputView, icon: Terminal, name: "Terminal", shortName: "T", description: "Copilot logs, errors, warnings" }
 ];
 
 export default function PLCCopilotProject() {
@@ -62,8 +67,72 @@ export default function PLCCopilotProject() {
   const [initialApiCall, setInitialApiCall] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+
+  const logTerminal = (line: string) => {
+    setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
+  };
+
+  // Return a very concise description of how the current stage modifies the prompt
+  const buildPromptModifier = (stage: typeof currentStage) => {
+    switch (stage) {
+      case 'project_kickoff':
+        return 'focus=high-level goals, constraints';
+      case 'gather_requirements':
+        return 'focus=ask clarifying Qs, gather IO, constraints';
+      case 'code_generation':
+        return 'focus=produce ST/FBD/SFC artifacts, include types';
+      case 'refinement_testing':
+        return 'focus=test-cases, optimize, fix issues';
+      case 'completed':
+        return 'focus=final checks, documentation';
+      default:
+        return 'focus=general';
+    }
+  };
+
+  // Very small heuristic to parse an MCQ out of assistant content
+  const parseMCQ = (text: string) => {
+    // look for lines that start with A), 1), -, or similar after a header like 'Options' or 'Choices'
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    // try to find a block that looks like options
+    const optionLines: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (/^(options|choices)[:]?$/i.test(l)) {
+        // take subsequent lines until a blank or non-option
+        for (let j = i+1; j < lines.length; j++) {
+          const candidate = lines[j];
+          if (/^([A-Z]\)|\d\.|-|•)\s*/.test(candidate)) {
+            optionLines.push(candidate.replace(/^([A-Z]\)|\d\.|-|•)\s*/, '').trim());
+          } else if (/^[A-Z]\)\s*/.test(candidate)) {
+            optionLines.push(candidate.replace(/^[A-Z]\)\s*/, '').trim());
+          } else {
+            break;
+          }
+        }
+        break;
+      }
+    }
+
+    // fallback: detect if first few lines look like 'A) ...' or '1. ...'
+    if (optionLines.length === 0) {
+      for (let i = 0; i < Math.min(lines.length, 12); i++) {
+        const m = lines[i].match(/^([A-Z]|\d+)[\)\.]\s+(.*)$/);
+        if (m) optionLines.push(m[2].trim());
+      }
+    }
+
+    if (optionLines.length >= 2) return optionLines;
+    return null;
+  };
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
   const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
+  
+  // Conversation stage management
+  const [currentStage, setCurrentStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed'>('gather_requirements');
+  const [nextStage, setNextStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed' | undefined>();
+  const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiCallInProgressRef = useRef(false);
@@ -93,6 +162,13 @@ export default function PLCCopilotProject() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Append lastError into terminal logs for quick visibility
+  useEffect(() => {
+    if (lastError) {
+      setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ERROR: ${lastError}`]);
+    }
+  }, [lastError]);
 
   // Set initial input from URL prompt if input is empty
   useEffect(() => {
@@ -139,6 +215,8 @@ export default function PLCCopilotProject() {
     setLastError(null);
 
     try {
+      // Log outgoing LLM request (concise)
+  logTerminal(`SEND LLM [${currentStage}] -> ${buildPromptModifier(currentStage)} model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
       // Call the real API - works for both initial and follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
@@ -147,6 +225,8 @@ export default function PLCCopilotProject() {
         max_completion_tokens: 1024
       });
 
+      // Log brief response summary
+      logTerminal(`RECV LLM <- length=${response.content.length}`);
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response.content,
@@ -154,6 +234,12 @@ export default function PLCCopilotProject() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Check if response contains MCQ and log options
+      const mcqOptions = parseMCQ(response.content);
+      if (mcqOptions && mcqOptions.length > 0) {
+        logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+      }
     } catch (error) {
       console.error('API call failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -196,6 +282,8 @@ export default function PLCCopilotProject() {
     setLastError(null);
 
     try {
+      // Log outgoing LLM request for submitted input
+  logTerminal(`SEND LLM [${currentStage}] -> ${buildPromptModifier(currentStage)} model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
       // Call the real API - works for both initial and follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
@@ -204,6 +292,8 @@ export default function PLCCopilotProject() {
         max_completion_tokens: 1024
       });
 
+      logTerminal(`RECV LLM <- length=${response.content.length}`);
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response.content,
@@ -211,6 +301,12 @@ export default function PLCCopilotProject() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Check if response contains MCQ and log options
+      const mcqOptions = parseMCQ(response.content);
+      if (mcqOptions && mcqOptions.length > 0) {
+        logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+      }
     } catch (error) {
       console.error('API call failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -298,6 +394,37 @@ export default function PLCCopilotProject() {
     });
 
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Handle stage transitions for the conversation flow
+  const handleStageTransition = (newStage: typeof currentStage, reason?: string) => {
+    // Log the stage transition succinctly and then perform it
+    logTerminal(`STAGE: ${currentStage} -> ${newStage}${reason ? ` (${reason})` : ''}`);
+    setCurrentStage(newStage);
+    // Here you could add API calls to update the backend stage
+    console.log(`Stage transition: ${currentStage} -> ${newStage}`, reason);
+  };
+
+  // Handle skip to code button - sends a message and transitions stage
+  const handleSkipToCode = async () => {
+    if (isLoading || apiCallInProgress) return; // Prevent if already processing
+    
+    const skipMessage: Message = {
+      id: Date.now().toString(),
+      content: "Generate Structured Text for a PLC now.",
+      role: "user",
+      timestamp: new Date(),
+      hasFiles: false
+    };
+
+    // Add the message to UI first
+    setMessages(prev => [...prev, skipMessage]);
+    
+    // Transition to code generation stage
+    handleStageTransition('code_generation', 'User clicked Skip to Code button');
+    
+    // Send the message to get LLM response
+    await sendMessage(skipMessage);
   };
 
   const removeFile = (fileId: string) => {
@@ -398,6 +525,40 @@ END_PROGRAM`}
             </div>
           </div>
         );
+      case "terminal":
+        return (
+          <div className="h-full p-6 flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <Terminal className="w-5 h-5 text-orange-500" />
+                <h2 className="text-sm font-semibold">Copilot Terminal</h2>
+                <p className="text-xs text-gray-400">Logs, errors and warnings</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(terminalLogs.join('\n')); }}
+                  className="text-xs text-gray-300 hover:text-white px-2 py-1 border border-gray-800 rounded bg-gray-900"
+                >
+                  Copy
+                </button>
+                <button
+                  onClick={() => setTerminalLogs([])}
+                  className="text-xs text-gray-300 hover:text-white px-2 py-1 border border-gray-800 rounded bg-gray-900"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-black bg-opacity-60 rounded-lg border border-gray-800 font-mono text-sm overflow-y-auto p-4">
+              {terminalLogs.length === 0 ? (
+                <div className="text-gray-500">No logs yet. Errors and warnings will appear here.</div>
+              ) : (
+                <pre className="text-gray-200 whitespace-pre-wrap">{terminalLogs.join('\n')}</pre>
+              )}
+            </div>
+          </div>
+        );
       default:
         return (
           <div className="flex items-center justify-center h-full text-gray-400">
@@ -453,13 +614,39 @@ END_PROGRAM`}
       <div className="flex-1 flex lg:flex-row flex-col min-h-0 overflow-hidden">
         {/* Desktop: Chat Sidebar | Mobile: Hidden (shown in tabs) */}
         <div 
-          className="hidden lg:flex flex-col bg-gray-900 border-r border-gray-800 min-h-0 relative"
+          className="hidden lg:flex flex-col bg-gray-950 border-r border-gray-800 min-h-0 relative"
           style={{ width: `${sidebarWidth}%` }}
         >
-          {/* Messages - Scrollable area */}
-          <div className="flex-1 overflow-y-auto px-6 py-6 min-h-0 relative">
-            {/* Files are now shown above individual messages */}
-            <div className="space-y-4 max-w-none">
+          {/* Messages - Full height scrollable area */}
+          <div className="flex-1 overflow-y-auto min-h-0 relative">
+            {/* Floating Stage Indicator Header with Frosted Glass Effect */}
+            <div className="sticky top-0 px-6 py-3 bg-gray-950/90 backdrop-blur-md min-h-[60px] flex items-center z-10">
+              <div className="flex items-center justify-between w-full">
+                <StageIndicator 
+                  currentStage={currentStage}
+                  nextStage={nextStage}
+                  confidence={stageProgress?.confidence}
+                />
+                
+                {/* Stage Transition Controls */}
+                {currentStage === 'gather_requirements' && (
+                  <Button
+                    size="sm"
+                    onClick={handleSkipToCode}
+                    disabled={isLoading || apiCallInProgress}
+                    className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 ml-3 bg-transparent disabled:opacity-50"
+                  >
+                    <SkipForward className="w-3 h-3 mr-1 text-gray-400" />
+                    <span className="align-middle">Skip to Code</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            {/* Chat messages with proper padding */}
+            <div className="px-6 py-6">
+              {/* Files are now shown above individual messages */}
+              <div className="space-y-4 max-w-none">
               {messages.map((message, idx) => {
                 return (
                 <div key={message.id}>
@@ -516,6 +703,7 @@ END_PROGRAM`}
               />
             )}
             <div ref={messagesEndRef} />
+            </div>
           </div>
 
           {/* Fixed Input Area at bottom */}
@@ -581,18 +769,18 @@ END_PROGRAM`}
 
         {/* Resize Handle for Desktop */}
         <div 
-          className="hidden lg:block w-2 bg-gray-700 hover:bg-orange-500 cursor-col-resize transition-colors relative group"
+          className="hidden lg:block w-1 bg-gray-700 hover:bg-gray-500 cursor-col-resize transition-colors relative group"
           onMouseDown={handleMouseDown}
           title="Drag to resize"
         >
-          <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-600 group-hover:bg-orange-400" />
+          <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-600 group-hover:bg-gray-400" />
         </div>
 
         {/* Mobile + Desktop: Tabbed Output Area */}
         <div className="flex-1 flex flex-col bg-gray-950 min-h-0">
           {/* Output Tabs - Including Chat tab for mobile - STICKY */}
-          <div className="border-b border-gray-800 px-6 py-3 flex-shrink-0 sticky top-0 bg-gray-950 z-20">
-            <div className="flex gap-1 overflow-x-auto">
+          <div className="border-b border-gray-800 px-6 py-3 flex-shrink-0 sticky top-0 bg-gray-950 z-20 min-h-[60px] flex items-center">
+            <div className="flex gap-1 overflow-x-auto w-full">
               {/* Chat tab - only visible on mobile */}
               <button
                 onClick={() => setActiveView("chat" as OutputView)}
