@@ -52,6 +52,7 @@ export default function PLCCopilotProject() {
   const [activeView, setActiveView] = useState<OutputView>("structured-text");
   const [initialApiCall, setInitialApiCall] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [apiCallInProgress, setApiCallInProgress] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -63,55 +64,63 @@ export default function PLCCopilotProject() {
     scrollToBottom();
   }, [messages]);
 
-  // Handle initial API call when component mounts with a prompt
+    // Handle initial prompt from main screen - only runs once
   useEffect(() => {
-    if (initialPrompt && !initialApiCall) {
-      console.log('Making initial API call for prompt:', initialPrompt);
+    if (initialPrompt && !initialApiCall && messages.length === 0) {
+      console.log('Processing initial prompt from main screen:', initialPrompt);
       setInitialApiCall(true);
+      setApiCallInProgress(true);
       setIsLoading(true);
-      
+      setInput('');
+
+      // Add user message immediately
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: initialPrompt,
+        role: "user",
+        timestamp: new Date()
+      };
+      setMessages([userMessage]);
+
+      // Call API for initial response
       apiClient.chat({
-        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. The user just asked: "${initialPrompt}". Please provide a helpful, detailed response about their PLC programming question or request.`,
+        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${initialPrompt}`,
         model: "gpt-4o-mini",
         temperature: 0.7,
         max_completion_tokens: 1024
-      }).then(response => {
-        console.log('Initial API response received');
+      }).then((response: ChatResponse) => {
+        console.log('Initial API response received, conversation started');
         const assistantMessage: Message = {
-          id: "2",
+          id: (Date.now() + 1).toString(),
           content: response.content,
           role: "assistant",
           timestamp: new Date()
         };
         setMessages(prev => [...prev, assistantMessage]);
-      }).catch(error => {
+      }).catch((error: Error) => {
         console.error('Initial API call failed:', error);
-        const fallbackMessage: Message = {
-          id: "2",
-          content: "I'll help you create that PLC solution. Let me analyze your requirements and generate the appropriate code. This structured text implementation will include all necessary safety interlocks and control logic.",
-          role: "assistant",
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, fallbackMessage]);
+        setLastError(error.message);
       }).finally(() => {
+        console.log('Initial API call completed, ready for follow-up messages');
         setIsLoading(false);
+        setApiCallInProgress(false);
       });
     }
-  }, [initialPrompt, initialApiCall]);
+  }, [initialPrompt, initialApiCall, messages.length]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('handleSubmit called with input:', input, 'isLoading:', isLoading);
+    console.log('handleSubmit called with input:', input, 'messages.length:', messages.length);
     
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || apiCallInProgress) return;
 
-    // Prevent duplicate API calls if we're still processing the initial prompt
-    if (initialPrompt && !initialApiCall) {
-      console.log('Skipping handleSubmit - initial API call not completed yet');
+    // Only allow handleSubmit for follow-up messages (after initial exchange)
+    if (messages.length < 2) {
+      console.log('Skipping handleSubmit - waiting for initial exchange to complete');
       return;
     }
 
-    console.log('Processing user message:', input.trim());
+    console.log('Processing follow-up user message:', input.trim());
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -123,10 +132,11 @@ export default function PLCCopilotProject() {
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    setApiCallInProgress(true);
     setLastError(null);
 
     try {
-      // Call the real API
+      // Call the real API for follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
         model: "gpt-4o-mini",
@@ -134,7 +144,7 @@ export default function PLCCopilotProject() {
         max_completion_tokens: 1024
       });
 
-      console.log('handleSubmit API response received');
+      console.log('Follow-up API response received');
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response.content,
@@ -157,6 +167,7 @@ export default function PLCCopilotProject() {
       setMessages(prev => [...prev, errorResponse]);
     } finally {
       setIsLoading(false);
+      setApiCallInProgress(false);
     }
   };
 
