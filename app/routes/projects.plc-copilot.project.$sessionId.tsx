@@ -10,10 +10,13 @@ import {
   Box,
   X,
   Paperclip,
-  ArrowLeft 
+  ArrowLeft,
+  SkipForward
 } from "lucide-react";
 import { apiClient, type ChatResponse } from "~/lib/api-client";
 import { ConnectionStatus, ErrorMessage } from "~/components/ConnectionStatus";
+import { StageIndicator } from "~/components/StageIndicator";
+import { Button } from "~/components/ui/button";
 
 interface Message {
   id: string;
@@ -64,6 +67,11 @@ export default function PLCCopilotProject() {
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
   const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
+  
+  // Conversation stage management
+  const [currentStage, setCurrentStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed'>('gather_requirements');
+  const [nextStage, setNextStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed' | undefined>();
+  const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiCallInProgressRef = useRef(false);
@@ -300,6 +308,13 @@ export default function PLCCopilotProject() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // Handle stage transitions for the conversation flow
+  const handleStageTransition = (newStage: typeof currentStage, reason?: string) => {
+    setCurrentStage(newStage);
+    // Here you could add API calls to update the backend stage
+    console.log(`Stage transition: ${currentStage} -> ${newStage}`, reason);
+  };
+
   const removeFile = (fileId: string) => {
     setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
     setSelectedFileId((current) => (current === fileId ? null : current));
@@ -453,13 +468,38 @@ END_PROGRAM`}
       <div className="flex-1 flex lg:flex-row flex-col min-h-0 overflow-hidden">
         {/* Desktop: Chat Sidebar | Mobile: Hidden (shown in tabs) */}
         <div 
-          className="hidden lg:flex flex-col bg-gray-900 border-r border-gray-800 min-h-0 relative"
+          className="hidden lg:flex flex-col bg-gray-950 border-r border-gray-800 min-h-0 relative"
           style={{ width: `${sidebarWidth}%` }}
         >
-          {/* Messages - Scrollable area */}
-          <div className="flex-1 overflow-y-auto px-6 py-6 min-h-0 relative">
-            {/* Files are now shown above individual messages */}
-            <div className="space-y-4 max-w-none">
+          {/* Messages - Full height scrollable area */}
+          <div className="flex-1 overflow-y-auto min-h-0 relative">
+            {/* Floating Stage Indicator Header with Frosted Glass Effect */}
+            <div className="sticky top-0 px-6 py-3 bg-gray-950/90 backdrop-blur-md min-h-[60px] flex items-center z-10">
+              <div className="flex items-center justify-between w-full">
+                <StageIndicator 
+                  currentStage={currentStage}
+                  nextStage={nextStage}
+                  confidence={stageProgress?.confidence}
+                />
+                
+                {/* Stage Transition Controls */}
+                {currentStage === 'gather_requirements' && (
+                  <Button
+                    size="sm"
+                    onClick={() => handleStageTransition('code_generation', 'User requested to skip to code generation')}
+                    className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 ml-3 bg-transparent"
+                  >
+                    <SkipForward className="w-3 h-3 mr-1 text-gray-400" />
+                    <span className="align-middle">Skip to Code</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            {/* Chat messages with proper padding */}
+            <div className="px-6 py-6">
+              {/* Files are now shown above individual messages */}
+              <div className="space-y-4 max-w-none">
               {messages.map((message, idx) => {
                 return (
                 <div key={message.id}>
@@ -516,6 +556,7 @@ END_PROGRAM`}
               />
             )}
             <div ref={messagesEndRef} />
+            </div>
           </div>
 
           {/* Fixed Input Area at bottom */}
@@ -581,18 +622,18 @@ END_PROGRAM`}
 
         {/* Resize Handle for Desktop */}
         <div 
-          className="hidden lg:block w-2 bg-gray-700 hover:bg-orange-500 cursor-col-resize transition-colors relative group"
+          className="hidden lg:block w-1 bg-gray-700 hover:bg-gray-500 cursor-col-resize transition-colors relative group"
           onMouseDown={handleMouseDown}
           title="Drag to resize"
         >
-          <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-600 group-hover:bg-orange-400" />
+          <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-600 group-hover:bg-gray-400" />
         </div>
 
         {/* Mobile + Desktop: Tabbed Output Area */}
         <div className="flex-1 flex flex-col bg-gray-950 min-h-0">
           {/* Output Tabs - Including Chat tab for mobile - STICKY */}
-          <div className="border-b border-gray-800 px-6 py-3 flex-shrink-0 sticky top-0 bg-gray-950 z-20">
-            <div className="flex gap-1 overflow-x-auto">
+          <div className="border-b border-gray-800 px-6 py-3 flex-shrink-0 sticky top-0 bg-gray-950 z-20 min-h-[60px] flex items-center">
+            <div className="flex gap-1 overflow-x-auto w-full">
               {/* Chat tab - only visible on mobile */}
               <button
                 onClick={() => setActiveView("chat" as OutputView)}
