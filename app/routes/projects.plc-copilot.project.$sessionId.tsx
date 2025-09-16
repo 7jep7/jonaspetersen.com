@@ -117,6 +117,10 @@ export default function PLCCopilotProject() {
       };
       setMessages([initialMessage]);
       
+      // Clear uploaded files state AND localStorage after creating initial message
+      setUploadedFiles([]);
+      localStorage.removeItem('plc_copilot_uploaded_files');
+      
       // Trigger API call for initial prompt
       sendMessage(initialMessage);
     }
@@ -185,6 +189,8 @@ export default function PLCCopilotProject() {
 
     setMessages(prev => [...prev, userMessage]);
     setInput("");
+    setUploadedFiles([]); // Clear uploaded files immediately when message is sent
+    localStorage.removeItem('plc_copilot_uploaded_files'); // Clear from localStorage too
     setIsLoading(true);
     setApiCallInProgress(true);
     setLastError(null);
@@ -221,8 +227,6 @@ export default function PLCCopilotProject() {
     } finally {
       setIsLoading(false);
       setApiCallInProgress(false);
-      // Clear uploaded files after sending message (like on index page)
-      setUploadedFiles([]);
     }
   };
 
@@ -459,14 +463,18 @@ END_PROGRAM`}
               {messages.map((message, idx) => {
                 return (
                 <div key={message.id}>
-                  {/* File indicator matching index page style - smaller version */}
-                  {message.role === "user" && message.hasFiles && message.attachedFiles && message.attachedFiles.length > 0 && (
+                  {/* File indicators matching index page style - smaller version */}
+                  {message.role === "user" && message.hasFiles && (
                     <div className="flex justify-end mb-2">
-                      <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full px-2 py-1 text-xs hover:bg-gray-800 transition-all duration-150 group">
-                        <FileText className="w-3 h-3 text-gray-300 group-hover:text-gray-100 transition-colors duration-150" />
-                        <span className="text-gray-300 font-medium group-hover:text-gray-100 transition-colors duration-150">
-                          {message.attachedFiles[0]?.name?.slice(0, 2).toUpperCase() || 'FL'}
-                        </span>
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        {(message.attachedFiles || uploadedFiles || []).map((file, fileIdx) => (
+                          <div key={fileIdx} className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full px-2 py-1 text-xs hover:bg-gray-800 transition-all duration-150 group">
+                            <FileText className="w-3 h-3 text-gray-300 group-hover:text-gray-100 transition-colors duration-150" />
+                            <span className="text-gray-300 font-medium group-hover:text-gray-100 transition-colors duration-150">
+                              {file?.name?.slice(0, 5).toUpperCase() || 'FILE'}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -637,14 +645,18 @@ END_PROGRAM`}
                     {messages.map((message, idx) => {
                       return (
                       <div key={message.id}>
-                        {/* File indicator matching index page style - smaller version */}
-                        {message.role === "user" && message.hasFiles && message.attachedFiles && message.attachedFiles.length > 0 && (
+                        {/* File indicators matching index page style - smaller version */}
+                        {message.role === "user" && message.hasFiles && (
                           <div className="flex justify-end mb-2">
-                            <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full px-2 py-1 text-xs hover:bg-gray-800 transition-all duration-150 group">
-                              <FileText className="w-3 h-3 text-gray-300 group-hover:text-gray-100 transition-colors duration-150" />
-                              <span className="text-gray-300 font-medium group-hover:text-gray-100 transition-colors duration-150">
-                                {message.attachedFiles[0]?.name?.slice(0, 2).toUpperCase() || 'FL'}
-                              </span>
+                            <div className="flex flex-wrap gap-2 justify-end">
+                              {(message.attachedFiles || uploadedFiles || []).map((file, fileIdx) => (
+                                <div key={fileIdx} className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full px-2 py-1 text-xs hover:bg-gray-800 transition-all duration-150 group">
+                                  <FileText className="w-3 h-3 text-gray-300 group-hover:text-gray-100 transition-colors duration-150" />
+                                  <span className="text-gray-300 font-medium group-hover:text-gray-100 transition-colors duration-150">
+                                    {file?.name?.slice(0, 5).toUpperCase() || 'FILE'}
+                                  </span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}

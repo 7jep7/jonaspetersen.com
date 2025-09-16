@@ -53,11 +53,19 @@ export default function PLCCopilotIndex() {
     }
   }, []);
 
-  // Persist uploadedFiles to localStorage
+  // Persist uploadedFiles to localStorage (excluding content to avoid quota issues)
   useEffect(() => {
     try {
-      console.log('Index page: Saving files to localStorage:', uploadedFiles);
-      localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(uploadedFiles));
+      // Only save file metadata (name, type, size, id) not content
+      const filesMetadata = uploadedFiles.map(file => ({
+        id: file.id,
+        name: file.name,
+        size: file.size,
+        type: file.type
+        // Exclude content to prevent localStorage quota exceeded error
+      }));
+      console.log('Index page: Saving files metadata to localStorage:', filesMetadata);
+      localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(filesMetadata));
     } catch (e) {
       console.error('Index page: Failed to save files to localStorage:', e);
     }
@@ -74,9 +82,8 @@ export default function PLCCopilotIndex() {
     const isMobile = window.innerWidth < 1024; // lg breakpoint
     
     if (isMobile) {
-      // Clear input and files immediately on mobile
+      // Clear input immediately on mobile (but keep files for session page)
       setInput("");
-      setUploadedFiles([]);
       // Navigate immediately on mobile
       navigate(`/projects/plc-copilot/project/${sessionId}?prompt=${encodeURIComponent(input.trim())}`);
     } else {
@@ -92,9 +99,8 @@ export default function PLCCopilotIndex() {
       };
       setMessages([userMessage]);
 
-      // Clear input and files for the transition
+      // Clear input for the transition (but keep files for session page)
       setInput("");
-      setUploadedFiles([]);
 
       // Wait for animation to complete, then navigate
       setTimeout(() => {
