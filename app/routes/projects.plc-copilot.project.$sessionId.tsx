@@ -35,24 +35,14 @@ export default function PLCCopilotProject() {
   const [searchParams] = useSearchParams();
   const initialPrompt = searchParams.get('prompt');
   
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const msgs: Message[] = [];
-    if (initialPrompt) {
-      msgs.push({
-        id: "1",
-        content: initialPrompt,
-        role: "user",
-        timestamp: new Date(Date.now() - 2000)
-      });
-    }
-    return msgs;
-  });
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeView, setActiveView] = useState<OutputView>("structured-text");
   const [initialApiCall, setInitialApiCall] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
+  const initialPromptProcessed = useRef(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -64,14 +54,18 @@ export default function PLCCopilotProject() {
     scrollToBottom();
   }, [messages]);
 
-    // Handle initial prompt from main screen - only runs once
+  // Handle initial prompt from main screen - only runs once
   useEffect(() => {
-    if (initialPrompt && !initialApiCall && messages.length === 0) {
-      console.log('Processing initial prompt from main screen:', initialPrompt);
+    if (initialPrompt && !initialApiCall && messages.length === 0 && !initialPromptProcessed.current) {
+      console.log('🔥 INITIAL PROMPT USEEFFECT TRIGGERED:', initialPrompt);
+      console.log('🔥 Current state - initialApiCall:', initialApiCall, 'messages.length:', messages.length);
+      
+      // Set the ref immediately to prevent double execution
+      initialPromptProcessed.current = true;
       setInitialApiCall(true);
-      setApiCallInProgress(true);
       setIsLoading(true);
-      setInput('');
+      setApiCallInProgress(true);
+      setLastError(null);
 
       // Add user message immediately
       const userMessage: Message = {
@@ -82,14 +76,14 @@ export default function PLCCopilotProject() {
       };
       setMessages([userMessage]);
 
-      // Call API for initial response
+      // Call API directly
       apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${initialPrompt}`,
         model: "gpt-4o-mini",
         temperature: 0.7,
         max_completion_tokens: 1024
-      }).then((response: ChatResponse) => {
-        console.log('Initial API response received, conversation started');
+      }).then((response) => {
+        console.log('🔥 INITIAL API RESPONSE RECEIVED');
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           content: response.content,
@@ -97,11 +91,20 @@ export default function PLCCopilotProject() {
           timestamp: new Date()
         };
         setMessages(prev => [...prev, assistantMessage]);
-      }).catch((error: Error) => {
-        console.error('Initial API call failed:', error);
-        setLastError(error.message);
+      }).catch((error) => {
+        console.error('🔥 INITIAL API CALL FAILED:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        setLastError(errorMessage);
+        
+        const errorResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          content: "I'm having trouble connecting to the backend right now. Please check your connection or try again later.",
+          role: "assistant",
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorResponse]);
       }).finally(() => {
-        console.log('Initial API call completed, ready for follow-up messages');
+        console.log('🔥 INITIAL API CALL COMPLETED');
         setIsLoading(false);
         setApiCallInProgress(false);
       });
@@ -110,17 +113,15 @@ export default function PLCCopilotProject() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('handleSubmit called with input:', input, 'messages.length:', messages.length);
+    console.log('🚀 HANDLESUBMIT TRIGGERED with input:', input, 'messages.length:', messages.length);
+    console.log('🚀 Current state - isLoading:', isLoading, 'apiCallInProgress:', apiCallInProgress);
     
-    if (!input.trim() || isLoading || apiCallInProgress) return;
-
-    // Only allow handleSubmit for follow-up messages (after initial exchange)
-    if (messages.length < 2) {
-      console.log('Skipping handleSubmit - waiting for initial exchange to complete');
+    if (!input.trim() || isLoading || apiCallInProgress) {
+      console.log('🚀 HANDLESUBMIT BLOCKED - early return');
       return;
     }
 
-    console.log('Processing follow-up user message:', input.trim());
+    console.log('🚀 PROCESSING USER MESSAGE VIA HANDLESUBMIT:', input.trim());
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -136,7 +137,7 @@ export default function PLCCopilotProject() {
     setLastError(null);
 
     try {
-      // Call the real API for follow-up messages
+      // Call the real API - works for both initial and follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
         model: "gpt-4o-mini",
@@ -144,7 +145,7 @@ export default function PLCCopilotProject() {
         max_completion_tokens: 1024
       });
 
-      console.log('Follow-up API response received');
+      console.log('🚀 HANDLESUBMIT API RESPONSE RECEIVED');
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response.content,
@@ -153,7 +154,7 @@ export default function PLCCopilotProject() {
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      console.error('API call failed:', error);
+      console.error('🚀 HANDLESUBMIT API CALL FAILED:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       setLastError(errorMessage);
       
@@ -166,6 +167,7 @@ export default function PLCCopilotProject() {
       };
       setMessages(prev => [...prev, errorResponse]);
     } finally {
+      console.log('🚀 HANDLESUBMIT COMPLETED');
       setIsLoading(false);
       setApiCallInProgress(false);
     }
