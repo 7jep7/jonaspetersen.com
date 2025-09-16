@@ -71,6 +71,16 @@ const projects: Project[] = [
     ]
   },
   {
+    title: "PLC Copilot",
+    description: "AI-powered assistant for industrial automation and PLC programming. Expert guidance on control systems, structured text programming, and industrial protocols using GPT-4o.",
+    skills: ["PLC Programming", "Industrial AI", "Automation", "GPT-4o"],
+    featured: true,
+    size: "large",
+    buttons: [
+      { label: "Try Copilot", icon: Play, href: "/projects/plc-copilot", variant: "default" as const }
+    ]
+  },
+  {
     title: "K2 AI",
     description: "Co-founded AI startup, scaled to 10 employees and >€500k revenue. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.",
     skills: ["LLMs", "SaaS", "AI Automation"],
@@ -472,6 +482,35 @@ export default function Home() {
                     <Link to="/projects/lbm-arena">
                       <Play className="w-4 h-4 mr-2" />
                       Try Arena
+                    </Link>
+                  </Button>
+                </div>
+              </Card>
+
+              {/* PLC Copilot */}
+              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-white mb-3">PLC Copilot</h3>
+                  <p className="text-gray-300 leading-relaxed mb-4">
+                    AI-powered assistant for industrial automation and PLC programming. Get expert guidance on control systems, structured text programming, and industrial protocols.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">PLC Programming</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Industrial AI</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Automation</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">GPT-4o</Badge>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    asChild
+                    variant="default"
+                    size="sm"
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    <Link to="/projects/plc-copilot">
+                      <Play className="w-4 h-4 mr-2" />
+                      Try Copilot
                     </Link>
                   </Button>
                 </div>
