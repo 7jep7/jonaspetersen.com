@@ -8,6 +8,8 @@ import {
   List, 
   Network, 
   Box,
+  X,
+  Paperclip,
   ArrowLeft 
 } from "lucide-react";
 import { apiClient, type ChatResponse } from "~/lib/api-client";
@@ -18,6 +20,16 @@ interface Message {
   content: string;
   role: "user" | "assistant";
   timestamp: Date;
+  hasFiles?: boolean;
+  attachedFiles?: { name: string; type: string }[]; // Store file info with message
+}
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  content?: string | null;
 }
 
 type OutputView = "chat" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin";
@@ -38,6 +50,8 @@ export default function PLCCopilotProject() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<OutputView>(() => {
     // Default to chat on mobile, structured-text on desktop
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
@@ -49,35 +63,68 @@ export default function PLCCopilotProject() {
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
+  const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiCallInProgressRef = useRef(false);
   const resizingRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Load uploaded files from localStorage on component mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedFiles = localStorage.getItem('plc_copilot_uploaded_files');
+      if (savedFiles) {
+        try {
+          const parsedFiles = JSON.parse(savedFiles);
+          setUploadedFiles(parsedFiles);
+        } catch (error) {
+          console.error('Failed to parse uploaded files from localStorage:', error);
+        }
+      }
+      setFilesLoaded(true); // Mark files as loaded (even if empty)
+    }
+  }, []);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Handle initial prompt from URL
+  // Set initial input from URL prompt if input is empty
   useEffect(() => {
-    if (initialPrompt && !initialApiCall && messages.length === 0) {
+    if (initialPrompt && input === "") {
+      setInput(initialPrompt);
+    }
+  }, [initialPrompt]);
+
+  // Handle initial prompt from URL (wait for uploadedFiles to be loaded first)
+  useEffect(() => {
+    if (initialPrompt && !initialApiCall && messages.length === 0 && filesLoaded) {
       setInitialApiCall(true);
+      // Clear the input field since this will be sent automatically
+      setInput("");
       const initialMessage: Message = {
         id: Date.now().toString(),
         content: initialPrompt,
         role: "user",
-        timestamp: new Date()
+        timestamp: new Date(),
+        hasFiles: uploadedFiles.length > 0,
+        attachedFiles: uploadedFiles.map(f => ({ name: f.name, type: f.type }))
       };
       setMessages([initialMessage]);
+      
+      // Clear uploaded files state AND localStorage after creating initial message
+      setUploadedFiles([]);
+      localStorage.removeItem('plc_copilot_uploaded_files');
       
       // Trigger API call for initial prompt
       sendMessage(initialMessage);
     }
-  }, [initialPrompt, initialApiCall, messages.length]);
+  }, [initialPrompt, initialApiCall, messages.length, filesLoaded, uploadedFiles]);
 
   const sendMessage = async (userMessage: Message) => {
     // Prevent multiple simultaneous API calls
@@ -135,11 +182,15 @@ export default function PLCCopilotProject() {
       id: Date.now().toString(),
       content: input.trim(),
       role: "user",
-      timestamp: new Date()
+      timestamp: new Date(),
+      hasFiles: uploadedFiles.length > 0, // Track if this message had files
+      attachedFiles: uploadedFiles.map(f => ({ name: f.name, type: f.type }))
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInput("");
+    setUploadedFiles([]); // Clear uploaded files immediately when message is sent
+    localStorage.removeItem('plc_copilot_uploaded_files'); // Clear from localStorage too
     setIsLoading(true);
     setApiCallInProgress(true);
     setLastError(null);
@@ -217,6 +268,63 @@ export default function PLCCopilotProject() {
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach(async (file) => {
+      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      let content: string | null = null;
+      try {
+        content = await file.text();
+      } catch (err) {
+        content = null;
+      }
+
+      const uploadedFile: UploadedFile = {
+        id,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        content
+      };
+
+      setUploadedFiles(prev => {
+        const next = [...prev, uploadedFile];
+        return next;
+      });
+
+      setSelectedFileId(id);
+    });
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+    setSelectedFileId((current) => (current === fileId ? null : current));
+  };
+
+  // Load persisted files from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('plc_copilot_uploaded_files');
+      if (raw) setUploadedFiles(JSON.parse(raw));
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  // Persist uploadedFiles to localStorage (only after initial load)
+  useEffect(() => {
+    if (!filesLoaded) return; // Don't persist until files are loaded from localStorage
+    try {
+      localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(uploadedFiles));
+    } catch (e) {
+      console.error('Session page: Failed to persist files:', e);
+    }
+  }, [uploadedFiles, filesLoaded]);
+
   // Cleanup resize event listeners on unmount
   useEffect(() => {
     return () => {
@@ -232,7 +340,7 @@ export default function PLCCopilotProject() {
           <div className="h-full p-6 flex flex-col min-h-0">
             <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1">
               <div className="flex-1 overflow-y-auto p-6">
-                <pre className="text-green-400 whitespace-pre-wrap">
+                <pre className="text-gray-200 whitespace-pre-wrap">
 {`// Conveyor Belt Control System
 // Generated by PLC Copilot
 
@@ -317,16 +425,18 @@ END_PROGRAM`}
       <header className="border-b border-gray-800 px-6 py-4 flex-shrink-0 z-10">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
-            <Link 
+            <Link
               to="/projects/plc-copilot"
               className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
+
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
                 <MessageSquare className="w-5 h-5 text-white" />
               </div>
+
               <div>
                 <h1 className="text-xl font-semibold">PLC Copilot</h1>
                 <div className="flex items-center gap-3">
@@ -347,27 +457,45 @@ END_PROGRAM`}
           style={{ width: `${sidebarWidth}%` }}
         >
           {/* Messages - Scrollable area */}
-          <div className="flex-1 overflow-y-auto px-6 py-6 min-h-0">
+          <div className="flex-1 overflow-y-auto px-6 py-6 min-h-0 relative">
+            {/* Files are now shown above individual messages */}
             <div className="space-y-4 max-w-none">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-lg px-4 py-3 ${
-                      message.role === "user"
-                        ? "bg-orange-500 text-white"
-                        : "bg-gray-800 text-gray-100"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap">{message.content}</p>
-                    <time className="text-xs opacity-70 mt-1 block">
-                      {message.timestamp.toLocaleTimeString()}
-                    </time>
+              {messages.map((message, idx) => {
+                return (
+                <div key={message.id}>
+                  {/* File indicators matching index page style - smaller version */}
+                  {message.role === "user" && message.hasFiles && (
+                    <div className="flex justify-end mb-2">
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        {(message.attachedFiles || uploadedFiles || []).map((file, fileIdx) => (
+                          <div key={fileIdx} className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full px-2 py-1 text-xs hover:bg-gray-800 transition-all duration-150 group">
+                            <FileText className="w-3 h-3 text-gray-300 group-hover:text-gray-100 transition-colors duration-150" />
+                            <span className="text-gray-300 font-medium group-hover:text-gray-100 transition-colors duration-150">
+                              {file?.name?.slice(0, 5).toUpperCase() || 'FILE'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[85%] rounded-lg px-4 py-3 ${
+                        message.role === "user"
+                          ? "bg-orange-500 text-white"
+                          : "bg-gray-800 text-gray-100"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap">{message.content}</p>
+                      <time className="text-xs opacity-70 mt-1 block">
+                        {message.timestamp.toLocaleTimeString()}
+                      </time>
+                    </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="bg-gray-800 rounded-lg px-3 py-2">
@@ -393,21 +521,55 @@ END_PROGRAM`}
           {/* Fixed Input Area at bottom */}
           <div className="border-t border-gray-800 p-6 flex-shrink-0">
             <form onSubmit={handleSubmit}>
+              {/* Show uploaded files above textarea exactly like index page */}
+              {uploadedFiles.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {uploadedFiles.map((f) => (
+                    <div key={f.id} className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-full px-3 py-2 text-sm">
+                      <FileText className="w-4 h-4 text-gray-300" />
+                      <span className="max-w-[220px] truncate text-white">{f.name}</span>
+                      <span className="text-xs text-gray-400">{f.type?.split('/').pop()?.toUpperCase() || ''}</span>
+                      <button onClick={() => removeFile(f.id)} className="text-gray-400 hover:text-red-400 ml-2">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="relative">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Describe your automation requirements..."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-12 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-24 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400"
                   rows={3}
                 />
+                {/* File upload input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  accept=".txt,.pdf,.doc,.docx,.xls,.xlsx,.csv,.json,.xml,.plc,.l5x"
+                />
+                {/* Attachment button - exact same positioning as index page */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute right-12 top-1/2 transform -translate-y-1/2 p-2 text-gray-400 hover:text-orange-500 transition-colors"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+                {/* Send button - exact same positioning as index page */}
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}
-                  className="absolute right-2 bottom-2 p-1.5 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  <Send className="w-3 h-3" />
+                  <Send className="w-4 h-4" />
                 </button>
               </div>
             </form>
@@ -477,27 +639,45 @@ END_PROGRAM`}
               /* Chat view for mobile - Full height with fixed input */
               <div className="h-full flex flex-col lg:hidden">
                 {/* Messages - Scrollable area */}
-                <div className="flex-1 overflow-y-auto px-4 py-6 min-h-0">
+                  <div className="flex-1 overflow-y-auto px-4 py-6 min-h-0 relative">
+                    {/* Files are now shown above individual messages */}
                   <div className="space-y-4 max-w-none pb-4">
-                    {messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[85%] rounded-lg px-4 py-3 ${
-                            message.role === "user"
-                              ? "bg-orange-500 text-white"
-                              : "bg-gray-800 text-gray-100"
-                          }`}
-                        >
-                          <p className="whitespace-pre-wrap">{message.content}</p>
-                          <time className="text-xs opacity-70 mt-1 block">
-                            {message.timestamp.toLocaleTimeString()}
-                          </time>
+                    {messages.map((message, idx) => {
+                      return (
+                      <div key={message.id}>
+                        {/* File indicators matching index page style - smaller version */}
+                        {message.role === "user" && message.hasFiles && (
+                          <div className="flex justify-end mb-2">
+                            <div className="flex flex-wrap gap-2 justify-end">
+                              {(message.attachedFiles || uploadedFiles || []).map((file, fileIdx) => (
+                                <div key={fileIdx} className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full px-2 py-1 text-xs hover:bg-gray-800 transition-all duration-150 group">
+                                  <FileText className="w-3 h-3 text-gray-300 group-hover:text-gray-100 transition-colors duration-150" />
+                                  <span className="text-gray-300 font-medium group-hover:text-gray-100 transition-colors duration-150">
+                                    {file?.name?.slice(0, 5).toUpperCase() || 'FILE'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                          <div
+                            className={`max-w-[85%] rounded-lg px-4 py-3 ${
+                              message.role === "user"
+                                ? "bg-orange-500 text-white"
+                                : "bg-gray-800 text-gray-100"
+                            }`}
+                          >
+                            <p className="whitespace-pre-wrap">{message.content}</p>
+                            <time className="text-xs opacity-70 mt-1 block">
+                              {message.timestamp.toLocaleTimeString()}
+                            </time>
+                          </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                     {isLoading && (
                       <div className="flex justify-start">
                         <div className="bg-gray-800 rounded-lg px-3 py-2">
@@ -523,21 +703,89 @@ END_PROGRAM`}
                 {/* Fixed Input Area at bottom */}
                 <div className="border-t border-gray-800 p-4 flex-shrink-0 bg-gray-950">
                   <form onSubmit={handleSubmit}>
+                    {/* Show uploaded files above textarea on mobile too */}
+                    {!selectedFileId && uploadedFiles.length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {uploadedFiles.map((f) => (
+                          <div key={f.id} className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-full px-3 py-2 text-sm">
+                            <FileText className="w-4 h-4 text-gray-300" />
+                            <span className="max-w-[220px] truncate text-white">{f.name}</span>
+                            <span className="text-xs text-gray-400">{f.type?.split('/').pop()?.toUpperCase() || ''}</span>
+                            <button onClick={() => removeFile(f.id)} className="text-gray-400 hover:text-red-400 ml-2">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* If a file is selected show filename header */}
+                    {selectedFileId && (
+                      <div className="mb-2 flex items-center justify-between bg-gray-900 border border-gray-800 rounded-t-lg px-3 py-2">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-4 h-4 text-gray-300" />
+                          <input
+                            className="bg-transparent text-sm text-white placeholder-gray-500 focus:outline-none"
+                            value={uploadedFiles.find(f => f.id === selectedFileId)?.name || ''}
+                            onChange={(e) => {
+                              const newName = e.target.value;
+                              setUploadedFiles(prev => prev.map(f => f.id === selectedFileId ? { ...f, name: newName } : f));
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedFileId(null)}
+                            className="text-gray-400 hover:text-white text-sm"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(selectedFileId)}
+                            className="text-red-400 hover:text-red-500 text-sm"
+                            title="Remove file"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="relative">
                       <textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        value={selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? input) : input}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (selectedFileId) {
+                            setUploadedFiles(prev => prev.map(f => f.id === selectedFileId ? { ...f, content: val } : f));
+                          } else {
+                            setInput(val);
+                          }
+                        }}
                         onKeyDown={handleKeyDownMobile}
-                        placeholder="Your thoughts..."
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-12 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400"
-                        rows={2}
+                        placeholder={selectedFileId ? "Edit file content..." : "Your thoughts..."}
+                        className={`w-full bg-gray-800 border border-gray-700 ${selectedFileId ? 'rounded-b-lg rounded-t-none' : 'rounded-lg'} px-4 py-3 ${selectedFileId ? 'pr-12' : 'pr-24'} resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400`}
+                        rows={selectedFileId ? 8 : 2}
                       />
+                      {/* File upload button - only show when not editing a file, match index page positioning */}
+                      {!selectedFileId && (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="absolute right-12 top-1/2 transform -translate-y-1/2 p-2 text-gray-400 hover:text-orange-500 transition-colors"
+                        >
+                          <Paperclip className="w-4 h-4" />
+                        </button>
+                      )}
+                      {/* Send button - match index page positioning */}
                       <button
                         type="submit"
-                        disabled={!input.trim() || isLoading}
-                        className="absolute right-2 bottom-2 p-1.5 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        disabled={!(selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? '').trim() : input.trim()) || isLoading}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        <Send className="w-3 h-3" />
+                        <Send className="w-4 h-4" />
                       </button>
                     </div>
                   </form>

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "@remix-run/react";
-import { Send, Plus, Settings, MessageSquare, Paperclip, X } from "lucide-react";
+import { Send, Plus, Settings, MessageSquare, Paperclip, X, FileText } from "lucide-react";
 import { ConnectionStatus } from "~/components/ConnectionStatus";
 
 interface Message {
@@ -15,6 +15,7 @@ interface UploadedFile {
   name: string;
   size: number;
   type: string;
+  content?: string | null;
 }
 
 export default function PLCCopilotIndex() {
@@ -22,6 +23,7 @@ export default function PLCCopilotIndex() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -36,6 +38,39 @@ export default function PLCCopilotIndex() {
     scrollToBottom();
   }, [messages]);
 
+  // Load persisted files from localStorage (if any)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('plc_copilot_uploaded_files');
+      console.log('Index page: Loading files from localStorage:', raw);
+      if (raw) {
+        const files = JSON.parse(raw);
+        console.log('Index page: Parsed files:', files);
+        setUploadedFiles(files);
+      }
+    } catch (e) {
+      console.error('Index page: Failed to load files from localStorage:', e);
+    }
+  }, []);
+
+  // Persist uploadedFiles to localStorage (excluding content to avoid quota issues)
+  useEffect(() => {
+    try {
+      // Only save file metadata (name, type, size, id) not content
+      const filesMetadata = uploadedFiles.map(file => ({
+        id: file.id,
+        name: file.name,
+        size: file.size,
+        type: file.type
+        // Exclude content to prevent localStorage quota exceeded error
+      }));
+      console.log('Index page: Saving files metadata to localStorage:', filesMetadata);
+      localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(filesMetadata));
+    } catch (e) {
+      console.error('Index page: Failed to save files to localStorage:', e);
+    }
+  }, [uploadedFiles]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -47,6 +82,8 @@ export default function PLCCopilotIndex() {
     const isMobile = window.innerWidth < 1024; // lg breakpoint
     
     if (isMobile) {
+      // Clear input immediately on mobile (but keep files for session page)
+      setInput("");
       // Navigate immediately on mobile
       navigate(`/projects/plc-copilot/project/${sessionId}?prompt=${encodeURIComponent(input.trim())}`);
     } else {
@@ -62,6 +99,9 @@ export default function PLCCopilotIndex() {
       };
       setMessages([userMessage]);
 
+      // Clear input for the transition (but keep files for session page)
+      setInput("");
+
       // Wait for animation to complete, then navigate
       setTimeout(() => {
         navigate(`/projects/plc-copilot/project/${sessionId}?prompt=${encodeURIComponent(input.trim())}`);
@@ -73,14 +113,32 @@ export default function PLCCopilotIndex() {
     const files = e.target.files;
     if (!files) return;
 
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach(async (file) => {
+      const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      let content: string | null = null;
+      try {
+        // Try to read text content for common text-like files
+        content = await file.text();
+      } catch (err) {
+        // Non-text files (pdf, images) will not have readable text; leave content null
+        content = null;
+      }
+
       const uploadedFile: UploadedFile = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        id,
         name: file.name,
         size: file.size,
-        type: file.type
+        type: file.type,
+        content
       };
-      setUploadedFiles(prev => [...prev, uploadedFile]);
+
+      setUploadedFiles(prev => {
+        const next = [...prev, uploadedFile];
+        return next;
+      });
+
+      // Auto-select the newly added file
+      setSelectedFileId(id);
     });
 
     // Reset file input
@@ -91,6 +149,7 @@ export default function PLCCopilotIndex() {
 
   const removeFile = (fileId: string) => {
     setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
+    setSelectedFileId((current) => (current === fileId ? null : current));
   };
 
   const formatFileSize = (bytes: number) => {
@@ -149,28 +208,7 @@ export default function PLCCopilotIndex() {
             : 'w-full'
         }`}>
           <div className="max-w-4xl mx-auto w-full h-full flex flex-col min-h-0">
-            {/* Uploaded Files */}
-            {uploadedFiles.length > 0 && (
-              <div className="border-b border-gray-800 px-6 py-3 flex-shrink-0">
-                <div className="flex flex-wrap gap-2">
-                  {uploadedFiles.map((file) => (
-                    <div
-                      key={file.id}
-                      className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 flex items-center gap-2 text-sm"
-                    >
-                      <span className="text-white truncate max-w-32">{file.name}</span>
-                      <span className="text-gray-400">({formatFileSize(file.size)})</span>
-                      <button
-                        onClick={() => removeFile(file.id)}
-                        className="text-gray-400 hover:text-red-400 transition-colors"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-6 py-8 min-h-0">
@@ -223,6 +261,22 @@ export default function PLCCopilotIndex() {
             {/* Input Area */}
             <div className="border-t border-gray-800 p-6 flex-shrink-0">
               <form onSubmit={handleSubmit} className="relative">
+                {/* If a file is selected, show filename/header above the textarea */}
+                  {uploadedFiles.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {uploadedFiles.map((f) => (
+                        <div key={f.id} className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-full px-3 py-2 text-sm">
+                          <FileText className="w-4 h-4 text-gray-300" />
+                          <span className="max-w-[220px] truncate text-white">{f.name}</span>
+                          <span className="text-xs text-gray-400">{f.type?.split('/').pop()?.toUpperCase() || ''}</span>
+                          <button onClick={() => removeFile(f.id)} className="text-gray-400 hover:text-red-400 ml-2">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                 <div className="relative">
                   <textarea
                     ref={textareaRef}
@@ -230,7 +284,7 @@ export default function PLCCopilotIndex() {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Ask about PLC programming, ladder logic, or automation..."
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-24 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400"
+                    className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-24 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400`}
                     rows={2}
                     style={{ minHeight: "64px", maxHeight: "120px" }}
                   />
