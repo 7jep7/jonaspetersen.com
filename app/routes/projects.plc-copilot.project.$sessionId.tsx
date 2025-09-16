@@ -20,14 +20,14 @@ interface Message {
   timestamp: Date;
 }
 
-type OutputView = "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin";
+type OutputView = "chat" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin";
 
 const outputViews = [
-  { id: "structured-text" as OutputView, icon: FileText, name: "Structured Text", shortName: "ST" },
-  { id: "function-block" as OutputView, icon: GitBranch, name: "Function Block Diagram", shortName: "FBD" },
-  { id: "sequential-chart" as OutputView, icon: List, name: "Sequential Function Chart", shortName: "SFC" },
-  { id: "signal-mapping" as OutputView, icon: Network, name: "Signal Mapping", shortName: "MAP" },
-  { id: "digital-twin" as OutputView, icon: Box, name: "Digital Twin", shortName: "DT" }
+  { id: "structured-text" as OutputView, icon: FileText, name: "Structured Text", shortName: "ST", description: "IEC 61131-3 Structured Text programming language" },
+  { id: "function-block" as OutputView, icon: GitBranch, name: "Function Block Diagram", shortName: "FBD", description: "Graphical programming with function blocks" },
+  { id: "sequential-chart" as OutputView, icon: List, name: "Sequential Function Chart", shortName: "SFC", description: "Sequential control flow programming" },
+  { id: "signal-mapping" as OutputView, icon: Network, name: "Signal Mapping", shortName: "MAP", description: "Input/output signal assignments" },
+  { id: "digital-twin" as OutputView, icon: Box, name: "Digital Twin", shortName: "DT", description: "3D visualization and simulation" }
 ];
 
 export default function PLCCopilotProject() {
@@ -38,13 +38,21 @@ export default function PLCCopilotProject() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [activeView, setActiveView] = useState<OutputView>("structured-text");
+  const [activeView, setActiveView] = useState<OutputView>(() => {
+    // Default to chat on mobile, structured-text on desktop
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      return "chat";
+    }
+    return "structured-text";
+  });
   const [initialApiCall, setInitialApiCall] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
-  const initialPromptProcessed = useRef(false);
-  
+  const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const apiCallInProgressRef = useRef(false);
+  const resizingRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -54,74 +62,74 @@ export default function PLCCopilotProject() {
     scrollToBottom();
   }, [messages]);
 
-  // Handle initial prompt from main screen - only runs once
+  // Handle initial prompt from URL
   useEffect(() => {
-    if (initialPrompt && !initialApiCall && messages.length === 0 && !initialPromptProcessed.current) {
-      console.log('🔥 INITIAL PROMPT USEEFFECT TRIGGERED:', initialPrompt);
-      console.log('🔥 Current state - initialApiCall:', initialApiCall, 'messages.length:', messages.length);
-      
-      // Set the ref immediately to prevent double execution
-      initialPromptProcessed.current = true;
+    if (initialPrompt && !initialApiCall && messages.length === 0) {
       setInitialApiCall(true);
-      setIsLoading(true);
-      setApiCallInProgress(true);
-      setLastError(null);
-
-      // Add user message immediately
-      const userMessage: Message = {
+      const initialMessage: Message = {
         id: Date.now().toString(),
         content: initialPrompt,
         role: "user",
         timestamp: new Date()
       };
-      setMessages([userMessage]);
-
-      // Call API directly
-      apiClient.chat({
-        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${initialPrompt}`,
-        model: "gpt-4o-mini",
-        temperature: 0.7,
-        max_completion_tokens: 1024
-      }).then((response) => {
-        console.log('🔥 INITIAL API RESPONSE RECEIVED');
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          content: response.content,
-          role: "assistant",
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-      }).catch((error) => {
-        console.error('🔥 INITIAL API CALL FAILED:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        setLastError(errorMessage);
-        
-        const errorResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          content: "I'm having trouble connecting to the backend right now. Please check your connection or try again later.",
-          role: "assistant",
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, errorResponse]);
-      }).finally(() => {
-        console.log('🔥 INITIAL API CALL COMPLETED');
-        setIsLoading(false);
-        setApiCallInProgress(false);
-      });
+      setMessages([initialMessage]);
+      
+      // Trigger API call for initial prompt
+      sendMessage(initialMessage);
     }
   }, [initialPrompt, initialApiCall, messages.length]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('🚀 HANDLESUBMIT TRIGGERED with input:', input, 'messages.length:', messages.length);
-    console.log('🚀 Current state - isLoading:', isLoading, 'apiCallInProgress:', apiCallInProgress);
-    
-    if (!input.trim() || isLoading || apiCallInProgress) {
-      console.log('🚀 HANDLESUBMIT BLOCKED - early return');
+  const sendMessage = async (userMessage: Message) => {
+    // Prevent multiple simultaneous API calls
+    if (apiCallInProgressRef.current) {
+      console.log('API call already in progress, skipping');
       return;
     }
 
-    console.log('🚀 PROCESSING USER MESSAGE VIA HANDLESUBMIT:', input.trim());
+    apiCallInProgressRef.current = true;
+    setIsLoading(true);
+    setApiCallInProgress(true);
+    setLastError(null);
+
+    try {
+      // Call the real API - works for both initial and follow-up messages
+      const response: ChatResponse = await apiClient.chat({
+        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
+        model: "gpt-4o-mini",
+        temperature: 0.7,
+        max_completion_tokens: 1024
+      });
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: response.content,
+        role: "assistant",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('API call failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setLastError(errorMessage);
+      
+      // Fallback message on error
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "I'm having trouble connecting to the backend right now. Please check your connection or try again later. In the meantime, I can help you with general PLC programming guidance.",
+        role: "assistant",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
+      setIsLoading(false);
+      setApiCallInProgress(false);
+      apiCallInProgressRef.current = false;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -145,7 +153,6 @@ export default function PLCCopilotProject() {
         max_completion_tokens: 1024
       });
 
-      console.log('🚀 HANDLESUBMIT API RESPONSE RECEIVED');
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response.content,
@@ -154,7 +161,7 @@ export default function PLCCopilotProject() {
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      console.error('🚀 HANDLESUBMIT API CALL FAILED:', error);
+      console.error('API call failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       setLastError(errorMessage);
       
@@ -167,27 +174,67 @@ export default function PLCCopilotProject() {
       };
       setMessages(prev => [...prev, errorResponse]);
     } finally {
-      console.log('🚀 HANDLESUBMIT COMPLETED');
       setIsLoading(false);
       setApiCallInProgress(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // Only allow Enter to submit on desktop (lg screens and above)
+    if (e.key === "Enter" && !e.shiftKey && window.innerWidth >= 1024) {
       e.preventDefault();
       handleSubmit(e);
     }
   };
 
+  const handleKeyDownMobile = (e: React.KeyboardEvent) => {
+    // On mobile, Enter key does not submit - only the button does
+    // This allows for multiline text input without accidental submission
+  };
+
+  // Handle sidebar resizing
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!resizingRef.current) return;
+    
+    const containerWidth = window.innerWidth;
+    const newWidth = (e.clientX / containerWidth) * 100;
+    
+    // Constrain between 20% and 60%
+    const constrainedWidth = Math.min(Math.max(newWidth, 20), 60);
+    setSidebarWidth(constrainedWidth);
+  };
+
+  const handleMouseUp = () => {
+    resizingRef.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  // Cleanup resize event listeners on unmount
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
   const renderOutputContent = () => {
     switch (activeView) {
       case "structured-text":
         return (
-          <div className="font-mono text-sm bg-gray-900 p-6 rounded-lg h-full overflow-auto">
-            <pre className="text-green-400 whitespace-pre-wrap">
+          <div className="h-full p-6 flex flex-col min-h-0">
+            <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1">
+              <div className="flex-1 overflow-y-auto p-6">
+                <pre className="text-green-400 whitespace-pre-wrap">
 {`// Conveyor Belt Control System
-// Generated by Xelerit PLC Copilot
+// Generated by PLC Copilot
 
 PROGRAM ConveyorControl
 VAR
@@ -238,7 +285,9 @@ END_IF;
 qStatusLight := bMotorRunning;
 
 END_PROGRAM`}
-            </pre>
+                </pre>
+              </div>
+            </div>
           </div>
         );
       default:
@@ -253,8 +302,9 @@ END_PROGRAM`}
               <h3 className="text-lg font-medium text-white mb-2">
                 {outputViews.find(v => v.id === activeView)?.name}
               </h3>
-              <p className="text-sm">Coming soon in the next release</p>
-              <p className="text-xs mt-2 opacity-70">This view will show the {activeView.replace('-', ' ')} representation</p>
+              <p className="text-sm">
+                {outputViews.find(v => v.id === activeView)?.description}
+              </p>
             </div>
           </div>
         );
@@ -289,13 +339,16 @@ END_PROGRAM`}
         </div>
       </header>
 
-      {/* Main Content Area - Full Screen Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Chat Column - Exactly 25% width */}
-        <div className="w-1/4 bg-gray-950 border-r border-gray-800 flex flex-col">
-          {/* Messages - Take available space above input */}
-          <div className="flex-1 overflow-y-auto px-4 py-6">
-            <div className="space-y-4 max-w-none pb-4">
+      {/* Main Content Area - Responsive Layout */}
+      <div className="flex-1 flex lg:flex-row flex-col min-h-0 overflow-hidden">
+        {/* Desktop: Chat Sidebar | Mobile: Hidden (shown in tabs) */}
+        <div 
+          className="hidden lg:flex flex-col bg-gray-900 border-r border-gray-800 min-h-0 relative"
+          style={{ width: `${sidebarWidth}%` }}
+        >
+          {/* Messages - Scrollable area */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 min-h-0">
+            <div className="space-y-4 max-w-none">
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -331,23 +384,23 @@ END_PROGRAM`}
               <ErrorMessage 
                 error={lastError} 
                 onRetry={() => setLastError(null)}
-                className="mx-4 mb-2" 
+                className="mt-4" 
               />
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area - Fixed at bottom */}
-          <div className="border-t border-gray-800 p-4 flex-shrink-0 bg-gray-950">
+          {/* Fixed Input Area at bottom */}
+          <div className="border-t border-gray-800 p-6 flex-shrink-0">
             <form onSubmit={handleSubmit}>
               <div className="relative">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Your thoughts..."
+                  placeholder="Describe your automation requirements..."
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-12 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400"
-                  rows={2}
+                  rows={3}
                 />
                 <button
                   type="submit"
@@ -358,19 +411,49 @@ END_PROGRAM`}
                 </button>
               </div>
             </form>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              Press Enter to send, Shift+Enter for new line
+            </p>
           </div>
         </div>
 
-        {/* Output Area - Exactly 75% width */}
-        <div className="flex-1 hidden md:flex flex-col bg-gray-950">
-          {/* Output Tabs */}
-          <div className="border-b border-gray-800 px-6 py-3 flex-shrink-0">
-            <div className="flex gap-1">
+        {/* Resize Handle for Desktop */}
+        <div 
+          className="hidden lg:block w-2 bg-gray-700 hover:bg-orange-500 cursor-col-resize transition-colors relative group"
+          onMouseDown={handleMouseDown}
+          title="Drag to resize"
+        >
+          <div className="absolute inset-y-0 left-1/2 transform -translate-x-1/2 w-0.5 bg-gray-600 group-hover:bg-orange-400" />
+        </div>
+
+        {/* Mobile + Desktop: Tabbed Output Area */}
+        <div className="flex-1 flex flex-col bg-gray-950 min-h-0">
+          {/* Output Tabs - Including Chat tab for mobile - STICKY */}
+          <div className="border-b border-gray-800 px-6 py-3 flex-shrink-0 sticky top-0 bg-gray-950 z-20">
+            <div className="flex gap-1 overflow-x-auto">
+              {/* Chat tab - only visible on mobile */}
+              <button
+                onClick={() => setActiveView("chat" as OutputView)}
+                className={`lg:hidden group relative p-2 rounded-lg transition-colors flex-shrink-0 ${
+                  activeView === "chat" 
+                    ? "bg-orange-500 text-white" 
+                    : "hover:bg-gray-800 text-gray-400"
+                }`}
+                title="Chat"
+              >
+                <MessageSquare className="w-5 h-5" />
+                
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30">
+                  Chat
+                </div>
+              </button>
+              
               {outputViews.map((view) => (
                 <button
                   key={view.id}
                   onClick={() => setActiveView(view.id)}
-                  className={`group relative p-2 rounded-lg transition-colors ${
+                  className={`group relative p-2 rounded-lg transition-colors flex-shrink-0 ${
                     activeView === view.id 
                       ? "bg-orange-500 text-white" 
                       : "hover:bg-gray-800 text-gray-400"
@@ -388,69 +471,84 @@ END_PROGRAM`}
             </div>
           </div>
 
-          {/* Output Content - Fills remaining space */}
-          <div className="flex-1 p-6 overflow-auto">
-            {renderOutputContent()}
-          </div>
-        </div>
-
-        {/* Mobile: Full-width chat only */}
-        <div className="md:hidden absolute inset-0 bg-gray-950 flex flex-col">
-          <div className="flex-1 overflow-y-auto px-4 py-6">
-            <div className="space-y-4 max-w-none pb-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-lg px-4 py-3 ${
-                      message.role === "user"
-                        ? "bg-orange-500 text-white"
-                        : "bg-gray-800 text-gray-100"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap">{message.content}</p>
-                    <time className="text-xs opacity-70 mt-1 block">
-                      {message.timestamp.toLocaleTimeString()}
-                    </time>
+          {/* Content Area - Scrollable */}
+          <div className="flex-1 overflow-hidden min-h-0">
+            {activeView === "chat" ? (
+              /* Chat view for mobile - Full height with fixed input */
+              <div className="h-full flex flex-col lg:hidden">
+                {/* Messages - Scrollable area */}
+                <div className="flex-1 overflow-y-auto px-4 py-6 min-h-0">
+                  <div className="space-y-4 max-w-none pb-4">
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[85%] rounded-lg px-4 py-3 ${
+                            message.role === "user"
+                              ? "bg-orange-500 text-white"
+                              : "bg-gray-800 text-gray-100"
+                          }`}
+                        >
+                          <p className="whitespace-pre-wrap">{message.content}</p>
+                          <time className="text-xs opacity-70 mt-1 block">
+                            {message.timestamp.toLocaleTimeString()}
+                          </time>
+                        </div>
+                      </div>
+                    ))}
+                    {isLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-gray-800 rounded-lg px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce"></div>
+                            <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
+                            <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
+                  {lastError && (
+                    <ErrorMessage 
+                      error={lastError} 
+                      onRetry={() => setLastError(null)}
+                      className="mx-4 mb-2" 
+                    />
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-800 rounded-lg px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+
+                {/* Fixed Input Area at bottom */}
+                <div className="border-t border-gray-800 p-4 flex-shrink-0 bg-gray-950">
+                  <form onSubmit={handleSubmit}>
+                    <div className="relative">
+                      <textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={handleKeyDownMobile}
+                        placeholder="Your thoughts..."
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-12 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400"
+                        rows={2}
+                      />
+                      <button
+                        type="submit"
+                        disabled={!input.trim() || isLoading}
+                        className="absolute right-2 bottom-2 p-1.5 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <Send className="w-3 h-3" />
+                      </button>
                     </div>
-                  </div>
+                  </form>
                 </div>
-              )}
-            </div>
-          </div>
-
-          <div className="border-t border-gray-800 p-4 flex-shrink-0 bg-gray-950">
-            <form onSubmit={handleSubmit}>
-              <div className="relative">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Your thoughts..."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-12 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400"
-                  rows={2}
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || isLoading}
-                  className="absolute right-2 bottom-2 p-1.5 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Send className="w-3 h-3" />
-                </button>
               </div>
-            </form>
+            ) : (
+              /* Output views - Full height container */
+              <div className="flex-1 min-h-0">
+                {renderOutputContent()}
+              </div>
+            )}
           </div>
         </div>
       </div>

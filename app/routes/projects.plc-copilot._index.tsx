@@ -40,25 +40,33 @@ export default function PLCCopilotIndex() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    // Start transition animation
-    setIsTransitioning(true);
-    
-    // Add the user message to show the transition
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: input.trim(),
-      role: "user",
-      timestamp: new Date()
-    };
-    setMessages([userMessage]);
-
     // Generate session ID
     const sessionId = Date.now().toString();
     
-    // Wait for animation to complete, then navigate
-    setTimeout(() => {
+    // Check if we're on mobile (no animation)
+    const isMobile = window.innerWidth < 1024; // lg breakpoint
+    
+    if (isMobile) {
+      // Navigate immediately on mobile
       navigate(`/projects/plc-copilot/project/${sessionId}?prompt=${encodeURIComponent(input.trim())}`);
-    }, 800); // 800ms animation duration
+    } else {
+      // Start transition animation on desktop
+      setIsTransitioning(true);
+      
+      // Add the user message to show the transition
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: input.trim(),
+        role: "user",
+        timestamp: new Date()
+      };
+      setMessages([userMessage]);
+
+      // Wait for animation to complete, then navigate
+      setTimeout(() => {
+        navigate(`/projects/plc-copilot/project/${sessionId}?prompt=${encodeURIComponent(input.trim())}`);
+      }, 800); // 800ms animation duration
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,16 +102,17 @@ export default function PLCCopilotIndex() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // Only allow Enter to submit on desktop (lg screens and above)
+    if (e.key === "Enter" && !e.shiftKey && window.innerWidth >= 1024) {
       e.preventDefault();
       handleSubmit(e);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col relative overflow-hidden">
+    <div className="h-screen bg-gray-950 text-white flex flex-col relative overflow-hidden">
       {/* Header */}
-      <header className={`border-b border-gray-800 px-6 py-4 transition-all duration-700 ${
+      <header className={`border-b border-gray-800 px-6 py-4 transition-all duration-700 flex-shrink-0 ${
         isTransitioning ? 'opacity-50' : 'opacity-100'
       }`}>
         <div className="flex items-center justify-between max-w-4xl mx-auto">
@@ -132,17 +141,17 @@ export default function PLCCopilotIndex() {
       </header>
 
       {/* Main Chat Area with animated width constraint */}
-      <main className="flex-1 flex relative">
+      <main className="flex-1 flex relative min-h-0">
         {/* Chat Container with animated width */}
-        <div className={`flex flex-col transition-all duration-700 ease-in-out ${
+        <div className={`flex flex-col min-h-0 ${
           isTransitioning 
-            ? 'w-1/4' 
+            ? 'lg:w-1/4 w-full transition-all duration-700 ease-in-out' 
             : 'w-full'
         }`}>
-          <div className="max-w-4xl mx-auto w-full h-full flex flex-col">
+          <div className="max-w-4xl mx-auto w-full h-full flex flex-col min-h-0">
             {/* Uploaded Files */}
             {uploadedFiles.length > 0 && (
-              <div className="border-b border-gray-800 px-6 py-3">
+              <div className="border-b border-gray-800 px-6 py-3 flex-shrink-0">
                 <div className="flex flex-wrap gap-2">
                   {uploadedFiles.map((file) => (
                     <div
@@ -164,7 +173,7 @@ export default function PLCCopilotIndex() {
             )}
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-6 py-8">
+            <div className="flex-1 overflow-y-auto px-6 py-8 min-h-0">
               {messages.length === 0 ? (
                 <div className="text-center text-gray-400 mt-20">
                   <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -212,7 +221,7 @@ export default function PLCCopilotIndex() {
             </div>
 
             {/* Input Area */}
-            <div className="border-t border-gray-800 p-6">
+            <div className="border-t border-gray-800 p-6 flex-shrink-0">
               <form onSubmit={handleSubmit} className="relative">
                 <div className="relative">
                   <textarea
@@ -222,8 +231,8 @@ export default function PLCCopilotIndex() {
                     onKeyDown={handleKeyDown}
                     placeholder="Ask about PLC programming, ladder logic, or automation..."
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-24 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400"
-                    rows={1}
-                    style={{ minHeight: "48px", maxHeight: "120px" }}
+                    rows={2}
+                    style={{ minHeight: "64px", maxHeight: "120px" }}
                   />
                   
                   {/* Attachment button */}
@@ -254,21 +263,21 @@ export default function PLCCopilotIndex() {
                 </div>
               </form>
               
-              <p className="text-xs text-gray-500 mt-2 text-center">
+              <p className="text-xs text-gray-500 mt-2 text-center hidden lg:block">
                 Press Enter to send, Shift+Enter for new line
               </p>
             </div>
           </div>
         </div>
 
-        {/* Animated right border/divider */}
+        {/* Animated right border/divider - Desktop only */}
         {isTransitioning && (
-          <div className="w-1 bg-gray-800 animate-pulse"></div>
+          <div className="hidden lg:block w-1 bg-gray-800 animate-pulse"></div>
         )}
 
-        {/* Future output area placeholder (invisible during transition) */}
+        {/* Future output area placeholder (invisible during transition) - Desktop only */}
         {isTransitioning && (
-          <div className="flex-1 bg-gray-900 opacity-20"></div>
+          <div className="hidden lg:block flex-1 bg-gray-900 opacity-20"></div>
         )}
       </main>
     </div>
