@@ -254,20 +254,7 @@ export default function PLCCopilotProject() {
       }
     ];
     
-    const information = `# Project Overview
-This automation project involves setting up a vision inspection system using KEYENCE cameras.
-
-## Key Requirements
-- Vision inspection for quality control
-- Integration with existing PLC system
-- Real-time data transmission
-- Error handling and alerts
-
-## Notes from Conversation
-- Customer prefers Ethernet/IP communication
-- System needs to handle 100 parts per minute
-- Integration with existing SCADA system required
-- Safety interlocks must be maintained`;
+    const information = "";
 
     return {
       deviceConstants,
@@ -287,8 +274,16 @@ This automation project involves setting up a vision inspection system using KEY
   const [editConstantName, setEditConstantName] = useState<string>("");
   const [editConstantValue, setEditConstantValue] = useState<string>("");
 
-  // Short subtle placeholder for Information textarea that clears on focus
-  const [informationPlaceholder, setInformationPlaceholder] = useState<string>("Notes...");
+  // Placeholder text for Information field that gets cleared before API calls
+  const informationPlaceholder = "No device constants gathered yet. Information will be extracted from datasheets and conversations.";
+
+  // Helper function to clean context before API calls (removes placeholder text)
+  const getCleanedProjectContext = () => {
+    return {
+      ...projectContext,
+      information: projectContext.information === informationPlaceholder ? "" : projectContext.information
+    };
+  };
 
   const toggleNode = (path: string) => {
     setCollapsedNodes(prev => ({ ...prev, [path]: !prev[path] }));
@@ -533,10 +528,11 @@ This automation project involves setting up a vision inspection system using KEY
 
     try {
     // Log outgoing LLM request (concise)
-    logApiSummary('SEND', userMessage.content);
+    const cleanedContext = getCleanedProjectContext();
+    logApiSummary('SEND', userMessage.content, cleanedContext);
       // Call the new context API - works for both initial and follow-up messages
       const response: ContextResponse = await apiClient.updateContext(
-        projectContext,
+        getCleanedProjectContext(),
         convertStageToApiFormat(currentStage),
         userMessage.content,
         undefined, // mcqResponses
@@ -549,7 +545,10 @@ This automation project involves setting up a vision inspection system using KEY
       );
 
   // Log brief response summary
-  logApiSummary('RECV', response.chat_message);
+  logApiSummary('RECV', response.chat_message, response.updated_context);
+
+      // Update context from backend response
+      updateContextFromResponse(response);
       
       // Update project context from API response
       setProjectContext(prev => ({
@@ -572,12 +571,6 @@ This automation project involves setting up a vision inspection system using KEY
       // Update progress if provided
       if (response.gathering_requirements_progress !== undefined) {
         setStageProgress({ confidence: response.gathering_requirements_progress });
-      }
-      
-      // Update generated code if provided
-      if (response.generated_code) {
-        setGeneratedCode(response.generated_code);
-        logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
       }
       
       // Check if response contains MCQ and extract options
@@ -629,11 +622,74 @@ This automation project involves setting up a vision inspection system using KEY
       .trim();
   };
 
+  // Helper function to update context from backend response
+  const updateContextFromResponse = (response: ContextResponse) => {
+    if (response.updated_context) {
+      // Convert the backend nested format to UI format for device constants
+      const backendDeviceConstants = response.updated_context.device_constants || {};
+      const uiDeviceConstants = convertApiFormatToDeviceConstants(backendDeviceConstants);
+      
+      // Update project context with backend data
+      setProjectContext(prev => ({
+        ...prev,
+        device_constants: backendDeviceConstants,
+        deviceConstants: uiDeviceConstants,
+        information: response.updated_context.information || ""
+      }));
+      
+      // Update information input field
+      setInformationInput(response.updated_context.information || "");
+      
+      // Log context update
+      logTerminal(`Context updated from backend: ${Object.keys(backendDeviceConstants).length} device groups, ${(response.updated_context.information || "").length} chars info`);
+    }
+
+    // Handle generated code with stage-based assertions
+    if (response.generated_code !== undefined) {
+      const currentStageForGeneration = response.current_stage || currentStage;
+      
+      // Assert that generated_code is not empty when in code generation or refinement stages
+      if ((currentStageForGeneration === 'code_generation' || currentStageForGeneration === 'refinement_testing')) {
+        if (!response.generated_code || response.generated_code.trim() === '') {
+          logTerminal(`ERROR: Empty generated_code received in ${currentStageForGeneration} stage`);
+          console.error(`Generated code assertion failed: Expected non-empty code in stage ${currentStageForGeneration}, but received: "${response.generated_code}"`);
+        } else {
+          // Update the Structured Text code with generated code from backend
+          setGeneratedCode(response.generated_code);
+          logTerminal(`Generated code updated (${response.generated_code.length} chars) for stage: ${currentStageForGeneration}`);
+        }
+      } else {
+        // In other stages, still update if code is provided
+        if (response.generated_code) {
+          setGeneratedCode(response.generated_code);
+          logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
+        }
+      }
+    }
+  };
+
+  // Helper function to intelligently truncate context for logging
+  const truncateContext = (context: any, maxLength: number = 200): string => {
+    try {
+      const contextStr = JSON.stringify(context);
+      if (contextStr.length <= maxLength) return contextStr;
+      
+      // Try to show structure while keeping it brief
+      const deviceConstantsCount = Object.keys(context.device_constants || {}).length;
+      const infoLength = (context.information || "").length;
+      
+      return `{device_constants: ${deviceConstantsCount} items, information: ${infoLength} chars}`;
+    } catch {
+      return "{context truncation error}";
+    }
+  };
+
   // Compact API summary logger used to produce a single-line send/receive entry
-  const logApiSummary = (direction: 'SEND' | 'RECV', contentSnippet: string) => {
+  const logApiSummary = (direction: 'SEND' | 'RECV', contentSnippet: string, context?: any) => {
     const ts = new Date().toLocaleTimeString();
     const short = contentSnippet.replace(/\s+/g, ' ').trim().slice(0, 80);
-    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}`);
+    const contextSummary = context ? ` | CTX: ${truncateContext(context)}` : '';
+    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}${contextSummary}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -675,17 +731,20 @@ This automation project involves setting up a vision inspection system using KEY
         // Construct MCQ selections for API
         const stripped = allSelectedOptions.map(o => stripMarkdown(o));
 
-        logApiSummary('SEND', `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`);
+        logApiSummary('SEND', `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`, getCleanedProjectContext());
 
         const response: ContextResponse = await apiClient.updateContext(
-          projectContext,
+          getCleanedProjectContext(),
           convertStageToApiFormat(currentStage),
           undefined, // no message
           stripped, // mcqResponses
           undefined // no files
         );
 
-        logApiSummary('RECV', response.chat_message);
+        logApiSummary('RECV', response.chat_message, response.updated_context);
+
+        // Update context from backend response
+        updateContextFromResponse(response);
         
         // Update project context from API response
         setProjectContext(prev => ({
@@ -707,12 +766,6 @@ This automation project involves setting up a vision inspection system using KEY
         // Update progress if provided
         if (response.gathering_requirements_progress !== undefined) {
           setStageProgress({ confidence: response.gathering_requirements_progress });
-        }
-        
-        // Update generated code if provided
-        if (response.generated_code) {
-          setGeneratedCode(response.generated_code);
-          logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
         }
         
         // Check if response contains MCQ and extract options
@@ -785,11 +838,11 @@ This automation project involves setting up a vision inspection system using KEY
       const stripped = allSelectedOptions.length > 0 ? allSelectedOptions.map(o => stripMarkdown(o)) : [];
 
       // Log outgoing LLM request for submitted input (compact)
-      logApiSummary('SEND', `${stripped.length > 0 ? `MCQ: ${stripped.join(', ')} + ` : ''}${visibleContent}`);
+      logApiSummary('SEND', `${stripped.length > 0 ? `MCQ: ${stripped.join(', ')} + ` : ''}${visibleContent}`, getCleanedProjectContext());
 
       // Call the new context API - include MCQ selections
       const response: ContextResponse = await apiClient.updateContext(
-        projectContext,
+        getCleanedProjectContext(),
         convertStageToApiFormat(currentStage),
         visibleContent,
         stripped.length > 0 ? stripped : undefined, // mcqResponses
@@ -801,7 +854,10 @@ This automation project involves setting up a vision inspection system using KEY
         }) : undefined
       );
       
-      logApiSummary('RECV', response.chat_message);
+      logApiSummary('RECV', response.chat_message, response.updated_context);
+
+      // Update context from backend response
+      updateContextFromResponse(response);
 
       // Update project context from API response
       setProjectContext(prev => ({
@@ -826,11 +882,6 @@ This automation project involves setting up a vision inspection system using KEY
       }
       
       // Update generated code if provided
-      if (response.generated_code) {
-        setGeneratedCode(response.generated_code);
-        logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
-      }
-
       // Check if response contains MCQ and extract options
       const mcqOptions = response.is_mcq ? response.mcq_options : null;
       if (mcqOptions && mcqOptions.length > 0) {
@@ -1311,8 +1362,6 @@ END_PROGRAM`}
                         device_constants: prev.device_constants // Keep device_constants in sync
                       }));
                     }}
-                    onFocus={() => setInformationPlaceholder("")}
-                    onBlur={() => { if (!informationInput) setInformationPlaceholder("Notes..."); }}
                     placeholder={informationPlaceholder}
                     className="w-full h-full min-h-[200px] bg-transparent resize-none outline-none placeholder-gray-500 text-gray-200 text-sm"
                   />
