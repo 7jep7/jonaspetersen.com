@@ -207,6 +207,9 @@ This automation project involves setting up a vision inspection system using KEY
 - Safety interlocks must be maintained`
   });
 
+  // Local editable information input (starts empty)
+  const [informationInput, setInformationInput] = useState<string>("");
+
   // Collapsed state for hierarchy nodes (keyed by dot-path like 'Device' or 'Device.Interface')
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
 
@@ -982,35 +985,12 @@ END_PROGRAM`}
                   Information
                 </h3>
                 <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto h-full">
-                  {projectContext.information.trim() === "" ? (
-                    <div className="text-gray-500 text-sm">No information gathered yet. Notes and insights will accumulate here as the dialogue progresses.</div>
-                  ) : (
-                    <div className="text-gray-200 text-sm prose prose-invert max-w-none prose-sm">
-                      <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          // Custom components for better styling
-                          h1: ({node, ...props}) => <h1 className="text-lg font-bold text-white mb-2" {...props} />,
-                          h2: ({node, ...props}) => <h2 className="text-base font-semibold text-white mb-2" {...props} />,
-                          h3: ({node, ...props}) => <h3 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
-                          p: ({node, ...props}) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
-                          ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1" {...props} />,
-                          ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1" {...props} />,
-                          li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
-                          code: ({node, ...props}) => {
-                            // Check if this is an inline code or block code
-                            const isInline = !props.className?.includes('language-');
-                            return isInline 
-                              ? <code className="bg-gray-800 text-orange-400 px-1 py-0.5 rounded text-xs font-mono" {...props} />
-                              : <code className="block bg-gray-800 text-gray-200 p-2 rounded text-xs font-mono overflow-x-auto" {...props} />;
-                          },
-                          strong: ({node, ...props}) => <strong className="font-semibold text-white" {...props} />,
-                        }}
-                      >
-                        {projectContext.information}
-                      </ReactMarkdown>
-                    </div>
-                  )}
+                  <textarea
+                    value={informationInput}
+                    onChange={(e) => setInformationInput(e.target.value)}
+                    placeholder="Add notes or project info..."
+                    className="w-full h-full min-h-[200px] bg-transparent resize-none outline-none placeholder-gray-500 text-gray-200 text-sm"
+                  />
                 </div>
               </div>
             </div>
