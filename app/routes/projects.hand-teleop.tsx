@@ -628,9 +628,19 @@ export default function HandTeleopProject() {
       setWsConnecting(true);
       addToConsole('🔌 Establishing WebSocket connection...');
       addToConsole(`🔗 Target: ${WS_BASE}/api/tracking/live`);
-      
-      // Initialize HandTrackingAPI with WebSocket URL
-      handTrackingApiRef.current = new HandTrackingAPI(WS_BASE);
+
+      // Safety: avoid accidentally connecting to localhost backends when not on localhost
+      const runningOnLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      const sanitizedWSBase = (!runningOnLocalhost && WS_BASE.includes('localhost'))
+        ? 'wss://hand-teleop-api.onrender.com'
+        : WS_BASE;
+
+      if (sanitizedWSBase !== WS_BASE) {
+        addToConsole(`⚠️ Sanitized WS target from ${WS_BASE} to ${sanitizedWSBase} because page is not on localhost`);
+      }
+
+      // Initialize HandTrackingAPI with sanitized WebSocket URL
+      handTrackingApiRef.current = new HandTrackingAPI(sanitizedWSBase);
       
       // Set up event handlers
       handTrackingApiRef.current.onConnectionChange = (connected: boolean) => {

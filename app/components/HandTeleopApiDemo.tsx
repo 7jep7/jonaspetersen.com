@@ -150,8 +150,18 @@ export function HandTeleopApiDemo() {
 
   const connectWebSocket = () => {
     try {
+      const runningOnLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
       const websocketUrl = API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
-      const newWs = new WebSocket(`${websocketUrl}/api/tracking/live`);
+
+      if (!runningOnLocalhost && websocketUrl.includes('localhost')) {
+        console.warn('WebSocket connect suppressed: not running on localhost and websocket target points to localhost');
+        return;
+      }
+
+      const sanitizedUrl = (!runningOnLocalhost && websocketUrl.includes('localhost')) ? 'wss://hand-teleop-api.onrender.com' : websocketUrl;
+      if (sanitizedUrl !== websocketUrl) console.log(`Sanitized WebSocket URL to ${sanitizedUrl}`);
+
+      const newWs = new WebSocket(`${sanitizedUrl}/api/tracking/live`);
       
       newWs.onopen = () => {
         console.log('🔗 WebSocket connected');
