@@ -220,8 +220,8 @@ export default function PLCCopilotProject() {
     setLastError(null);
 
     try {
-      // Log outgoing LLM request (concise)
-  logTerminal(`SEND LLM [${currentStage}] -> ${buildPromptModifier(currentStage)} model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
+    // Log outgoing LLM request (concise)
+    logApiSummary('SEND', userMessage.content);
       // Call the real API - works for both initial and follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
@@ -230,8 +230,8 @@ export default function PLCCopilotProject() {
         max_completion_tokens: 1024
       });
 
-      // Log brief response summary
-      logTerminal(`RECV LLM <- length=${response.content.length}`);
+  // Log brief response summary
+  logApiSummary('RECV', response.content);
       
       // Check if response contains MCQ and extract options
       const mcqOptions = parseMCQ(response.content);
@@ -266,6 +266,27 @@ export default function PLCCopilotProject() {
       setApiCallInProgress(false);
       apiCallInProgressRef.current = false;
     }
+  };
+
+  // Utility: strip simple markdown from MCQ option strings so backend receives clean text
+  const stripMarkdown = (s: string) => {
+    if (!s) return s;
+    // Remove bold/italic/inline code markers and links: **bold**, __bold__, *italic*, _italic_, `code`, [text](url)
+    return s
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/_(.*?)_/g, '$1')
+      .replace(/`(.*?)`/g, '$1')
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+      .trim();
+  };
+
+  // Compact API summary logger used to produce a single-line send/receive entry
+  const logApiSummary = (direction: 'SEND' | 'RECV', contentSnippet: string) => {
+    const ts = new Date().toLocaleTimeString();
+    const short = contentSnippet.replace(/\s+/g, ' ').trim().slice(0, 80);
+    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -304,19 +325,21 @@ export default function PLCCopilotProject() {
       logTerminal(`MCQ-only submission: ${allSelectedOptions.length} options selected, continuing conversation flow`);
 
       try {
-        // Construct prompt with MCQ selections as context
-        const mcqContext = `User selected the following options: ${allSelectedOptions.join(', ')}`;
-        
-        logTerminal(`SEND LLM [${currentStage}] -> MCQ selections: ${allSelectedOptions.join(', ')}`);
-        
+        // Construct prompt with MCQ selections as context (strip markdown before sending)
+        const stripped = allSelectedOptions.map(o => stripMarkdown(o));
+        const mcqBlock = `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`; // explicit delimiter for backend parsing
+        const mcqContext = `User selected the following options: ${stripped.join(', ')}`;
+
+        logApiSummary('SEND', `${mcqBlock} ${mcqContext}`);
+
         const response: ChatResponse = await apiClient.chat({
-          user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext}. Continue the conversation based on these selections.`,
+          user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext}. ${mcqBlock}. Continue the conversation based on these selections.`,
           model: "gpt-4o-mini",
           temperature: 0.7,
           max_completion_tokens: 1024
         });
 
-        logTerminal(`RECV LLM <- length=${response.content.length}`);
+        logApiSummary('RECV', response.content);
         
         // Check if response contains MCQ and extract options
         const mcqOptions = parseMCQ(response.content);
@@ -355,48 +378,51 @@ export default function PLCCopilotProject() {
     }
 
     // Handle text submissions (with optional MCQ selections)
-    let messageContent = '';
-    if (mcqSelectionMessages.length > 0 && input.trim()) {
-      messageContent = mcqSelectionMessages.join('\n') + '\n\nAdditional message: ' + input.trim();
-    } else {
-      messageContent = input.trim();
-    }
+    // Show only the user's typed text in the UI. If MCQ selections exist, send them to the backend
+    // as additional context but don't duplicate them in the visible user message.
+    const visibleContent = input.trim();
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: messageContent,
+      content: visibleContent,
       role: "user",
       timestamp: new Date(),
       hasFiles: uploadedFiles.length > 0,
       attachedFiles: uploadedFiles.map(f => ({ name: f.name, type: f.type }))
     };
 
+    // Add only the typed message to the UI
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setUploadedFiles([]);
     localStorage.removeItem('plc_copilot_uploaded_files');
-    
-    // Log MCQ selections if present (but keep them selected)
+
+    // Log MCQ selections if present (they will be sent to the backend but not shown in the UI)
     if (allSelectedOptions.length > 0) {
       logTerminal(`MCQ submission: ${allSelectedOptions.length} options submitted with message`);
     }
-    
+
     setIsLoading(true);
     setApiCallInProgress(true);
     setLastError(null);
 
     try {
-      // Log outgoing LLM request for submitted input
-  logTerminal(`SEND LLM [${currentStage}] -> ${buildPromptModifier(currentStage)} model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
-      // Call the real API - works for both initial and follow-up messages
+      // Prepare MCQ context text (sent to backend only)
+      const stripped = allSelectedOptions.length > 0 ? allSelectedOptions.map(o => stripMarkdown(o)) : [];
+      const mcqBlock = stripped.length > 0 ? `MCQ_SELECTIONS: ${stripped.join(' ||| ')}` : '';
+      const mcqContext = stripped.length > 0 ? `User selected the following options: ${stripped.join(', ')}` : '';
+
+      // Log outgoing LLM request for submitted input (compact)
+      logApiSummary('SEND', `${mcqBlock} ${visibleContent}`);
+
+      // Call the real API - include MCQ selections in the user_prompt but don't display them in the UI
       const response: ChatResponse = await apiClient.chat({
-        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
+        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext} ${mcqBlock} User request: ${visibleContent}`,
         model: "gpt-4o-mini",
         temperature: 0.7,
         max_completion_tokens: 1024
       });
-
-      logTerminal(`RECV LLM <- length=${response.content.length}`);
+      logApiSummary('RECV', response.content);
 
       // Check if response contains MCQ and extract options
       const mcqOptions = parseMCQ(response.content);
@@ -571,9 +597,9 @@ export default function PLCCopilotProject() {
       case "structured-text":
         return (
           <div className="h-full p-6 flex flex-col min-h-0">
-            <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1">
-              <div className="flex-1 overflow-y-auto p-6">
-                <pre className="text-gray-200 whitespace-pre-wrap">
+            <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-6 min-h-0">
+                <pre className="text-gray-200 whitespace-pre-wrap break-words">
 {`// Conveyor Belt Control System
 // Generated by PLC Copilot
 
@@ -656,11 +682,11 @@ END_PROGRAM`}
               </div>
             </div>
 
-            <div className="flex-1 bg-black bg-opacity-60 rounded-lg border border-gray-800 font-mono text-sm overflow-y-auto p-4">
+            <div className="flex-1 bg-black bg-opacity-60 rounded-lg border border-gray-800 font-mono text-sm overflow-y-auto p-4 min-h-0">
               {terminalLogs.length === 0 ? (
                 <div className="text-gray-500">No logs yet. Errors and warnings will appear here.</div>
               ) : (
-                <pre className="text-gray-200 whitespace-pre-wrap">{terminalLogs.join('\n')}</pre>
+                <pre className="text-gray-200 whitespace-pre-wrap break-words">{terminalLogs.join('\n')}</pre>
               )}
             </div>
           </div>
