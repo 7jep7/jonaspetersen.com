@@ -288,13 +288,74 @@ export default function PLCCopilotProject() {
     
     if (isLoading) return;
 
-    // Construct message content with MCQ selections and text
-    let messageContent = '';
-    if (mcqSelectionMessages.length > 0) {
-      messageContent = mcqSelectionMessages.join('\n');
-      if (input.trim()) {
-        messageContent += '\n\nAdditional message: ' + input.trim();
+    // Handle MCQ-only submissions (no user message created)
+    if (!input.trim() && allSelectedOptions.length > 0) {
+      // Clear inputs but keep MCQ selections visible
+      setInput("");
+      setUploadedFiles([]);
+      localStorage.removeItem('plc_copilot_uploaded_files');
+      
+      setIsLoading(true);
+      setApiCallInProgress(true);
+      setLastError(null);
+      
+      logTerminal(`MCQ-only submission: ${allSelectedOptions.length} options selected, continuing conversation flow`);
+
+      try {
+        // Construct prompt with MCQ selections as context
+        const mcqContext = `User selected the following options: ${allSelectedOptions.join(', ')}`;
+        
+        logTerminal(`SEND LLM [${currentStage}] -> MCQ selections: ${allSelectedOptions.join(', ')}`);
+        
+        const response: ChatResponse = await apiClient.chat({
+          user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext}. Continue the conversation based on these selections.`,
+          model: "gpt-4o-mini",
+          temperature: 0.7,
+          max_completion_tokens: 1024
+        });
+
+        logTerminal(`RECV LLM <- length=${response.content.length}`);
+        
+        // Check if response contains MCQ and extract options
+        const mcqOptions = parseMCQ(response.content);
+        if (mcqOptions && mcqOptions.length > 0) {
+          logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+        }
+        
+        const assistantMessage: Message = {
+          id: Date.now().toString(),
+          content: response.content,
+          role: "assistant",
+          timestamp: new Date(),
+          mcqOptions: mcqOptions || undefined,
+          isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        
+      } catch (error) {
+        console.error('API call failed:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        setLastError(errorMessage);
+        
+        const errorResponse: Message = {
+          id: Date.now().toString(),
+          content: `Error: ${errorMessage}. Please try again.`,
+          role: "assistant",
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorResponse]);
+      } finally {
+        setIsLoading(false);
+        setApiCallInProgress(false);
       }
+      
+      return; // Exit early for MCQ-only submissions
+    }
+
+    // Handle text submissions (with optional MCQ selections)
+    let messageContent = '';
+    if (mcqSelectionMessages.length > 0 && input.trim()) {
+      messageContent = mcqSelectionMessages.join('\n') + '\n\nAdditional message: ' + input.trim();
     } else {
       messageContent = input.trim();
     }
@@ -304,18 +365,17 @@ export default function PLCCopilotProject() {
       content: messageContent,
       role: "user",
       timestamp: new Date(),
-      hasFiles: uploadedFiles.length > 0, // Track if this message had files
+      hasFiles: uploadedFiles.length > 0,
       attachedFiles: uploadedFiles.map(f => ({ name: f.name, type: f.type }))
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInput("");
-    setUploadedFiles([]); // Clear uploaded files immediately when message is sent
-    localStorage.removeItem('plc_copilot_uploaded_files'); // Clear from localStorage too
+    setUploadedFiles([]);
+    localStorage.removeItem('plc_copilot_uploaded_files');
     
-    // Clear MCQ selections after submission
+    // Log MCQ selections if present (but keep them selected)
     if (allSelectedOptions.length > 0) {
-      setSelectedMcqOptions({});
       logTerminal(`MCQ submission: ${allSelectedOptions.length} options submitted with message`);
     }
     
@@ -738,10 +798,18 @@ END_PROGRAM`}
                         <div className="grid gap-2">
                           {message.mcqOptions.map((option, optionIndex) => {
                             const isSelected = selectedMcqOptions[message.id]?.includes(option) || false;
+                            // MCQ is only interactive if this is the latest assistant message
+                            const isLatestAssistantMessage = idx === messages.length - 1 || 
+                              (idx === messages.length - 2 && messages[messages.length - 1].role === "user");
+                            const isInteractive = isLatestAssistantMessage && !isLoading;
+                            
                             return (
                               <button
                                 key={optionIndex}
+                                disabled={!isInteractive}
                                 onClick={() => {
+                                  if (!isInteractive) return;
+                                  
                                   const currentSelections = selectedMcqOptions[message.id] || [];
                                   let newSelections: string[];
                                   
@@ -765,18 +833,22 @@ END_PROGRAM`}
                                   logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
                                 }}
                                 className={`px-3 py-2 rounded-lg border text-left transition-colors ${
-                                  isSelected
-                                    ? "bg-orange-500 border-orange-500 text-white"
-                                    : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
+                                  !isInteractive 
+                                    ? isSelected
+                                      ? "bg-orange-500/50 border-orange-500/50 text-white/70 cursor-not-allowed"
+                                      : "bg-gray-800/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
+                                    : isSelected
+                                      ? "bg-orange-500 border-orange-500 text-white"
+                                      : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
                                 }`}
                               >
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-3 h-3 rounded border ${
-                                    message.isMultiSelect ? "rounded-sm" : "rounded-full"
-                                  } ${
-                                    isSelected ? "bg-white" : "border-gray-400"
-                                  }`} />
-                                  <span className="text-sm">{option}</span>
+                                <div className="flex items-start gap-2">
+                                  {message.isMultiSelect && (
+                                    <div className={`w-3 h-3 rounded-full border flex-shrink-0 mt-0.5 ${
+                                      isSelected ? "bg-white border-white" : "border-gray-400"
+                                    }`} />
+                                  )}
+                                  <span className="text-sm leading-relaxed">{option}</span>
                                 </div>
                               </button>
                             );
@@ -982,10 +1054,18 @@ END_PROGRAM`}
                               <div className="grid gap-2">
                                 {message.mcqOptions.map((option, optionIndex) => {
                                   const isSelected = selectedMcqOptions[message.id]?.includes(option) || false;
+                                  // MCQ is only interactive if this is the latest assistant message
+                                  const isLatestAssistantMessage = idx === messages.length - 1 || 
+                                    (idx === messages.length - 2 && messages[messages.length - 1].role === "user");
+                                  const isInteractive = isLatestAssistantMessage && !isLoading;
+                                  
                                   return (
                                     <button
                                       key={optionIndex}
+                                      disabled={!isInteractive}
                                       onClick={() => {
+                                        if (!isInteractive) return;
+                                        
                                         const currentSelections = selectedMcqOptions[message.id] || [];
                                         let newSelections: string[];
                                         
@@ -1009,18 +1089,22 @@ END_PROGRAM`}
                                         logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
                                       }}
                                       className={`px-3 py-2 rounded-lg border text-left transition-colors ${
-                                        isSelected
-                                          ? "bg-orange-500 border-orange-500 text-white"
-                                          : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
+                                        !isInteractive 
+                                          ? isSelected
+                                            ? "bg-orange-500/50 border-orange-500/50 text-white/70 cursor-not-allowed"
+                                            : "bg-gray-800/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
+                                          : isSelected
+                                            ? "bg-orange-500 border-orange-500 text-white"
+                                            : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
                                       }`}
                                     >
-                                      <div className="flex items-center gap-2">
-                                        <div className={`w-3 h-3 rounded border ${
-                                          message.isMultiSelect ? "rounded-sm" : "rounded-full"
-                                        } ${
-                                          isSelected ? "bg-white" : "border-gray-400"
-                                        }`} />
-                                        <span className="text-sm">{option}</span>
+                                      <div className="flex items-start gap-2">
+                                        {message.isMultiSelect && (
+                                          <div className={`w-3 h-3 rounded-full border flex-shrink-0 mt-0.5 ${
+                                            isSelected ? "bg-white border-white" : "border-gray-400"
+                                          }`} />
+                                        )}
+                                        <span className="text-sm leading-relaxed">{option}</span>
                                       </div>
                                     </button>
                                   );
