@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   SkipForward
 } from "lucide-react";
+import { Edit } from "lucide-react";
 import { apiClient, type ChatResponse } from "~/lib/api-client";
 import { ConnectionStatus, ErrorMessage } from "~/components/ConnectionStatus";
 import { StageIndicator } from "~/components/StageIndicator";
@@ -224,8 +225,66 @@ This automation project involves setting up a vision inspection system using KEY
   // Collapsed state for hierarchy nodes (keyed by dot-path like 'Device' or 'Device.Interface')
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
 
+  // Inline edit state for device constants
+  const [editingConstantId, setEditingConstantId] = useState<string | null>(null);
+  const [editConstantName, setEditConstantName] = useState<string>("");
+  const [editConstantValue, setEditConstantValue] = useState<string>("");
+
+  // Short subtle placeholder for Information textarea that clears on focus
+  const [informationPlaceholder, setInformationPlaceholder] = useState<string>("Notes...");
+
   const toggleNode = (path: string) => {
     setCollapsedNodes(prev => ({ ...prev, [path]: !prev[path] }));
+  };
+
+  // Delete a device constant by id
+  const deleteDeviceConstant = (id: string) => {
+    setProjectContext(prev => ({
+      ...prev,
+      deviceConstants: prev.deviceConstants.filter(dc => dc.id !== id)
+    }));
+    logTerminal(`Deleted device constant ${id}`);
+  };
+
+  const startEditConstant = (constant: DeviceConstant) => {
+    const fullName = [...(constant.path || []), constant.name].join('.');
+    setEditingConstantId(constant.id);
+    setEditConstantName(fullName);
+    setEditConstantValue(constant.value);
+  };
+
+  const cancelEditConstant = () => {
+    setEditingConstantId(null);
+    setEditConstantName("");
+    setEditConstantValue("");
+  };
+
+  const saveEditConstant = (id: string) => {
+    const nameTrim = editConstantName.trim();
+    const valueTrim = editConstantValue.trim();
+    if (!nameTrim || !valueTrim) {
+      logTerminal('Edit cancelled - name and value required');
+      return;
+    }
+
+    const parts = nameTrim.split('.').map(p => p.trim()).filter(Boolean);
+    let newPath: string[] = [];
+    let newName = nameTrim;
+    if (parts.length > 1) {
+      newName = parts.pop() as string;
+      newPath = parts;
+    } else {
+      newPath = [];
+      newName = parts[0] || nameTrim;
+    }
+
+    setProjectContext(prev => ({
+      ...prev,
+      deviceConstants: prev.deviceConstants.map(dc => dc.id === id ? { ...dc, path: newPath, name: newName, value: valueTrim, source: 'manual' } : dc)
+    }));
+
+    logTerminal(`Edited device constant ${id} -> ${[...newPath, newName].join('.')} = ${valueTrim}`);
+    cancelEditConstant();
   };
 
   const logTerminal = (line: string) => {
@@ -314,6 +373,29 @@ This automation project involves setting up a vision inspection system using KEY
       setFilesLoaded(true); // Mark files as loaded (even if empty)
     }
   }, []);
+
+  // Load persisted project context (device constants + information) for this session from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = `plc_copilot_context_${sessionId ?? 'default'}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed: ProjectContext = JSON.parse(raw);
+        // Only override if parsed looks valid
+        if (parsed && Array.isArray(parsed.deviceConstants)) {
+          setProjectContext(parsed);
+          setInformationInput(parsed.information || "");
+          logTerminal(`Loaded persisted project context (${parsed.deviceConstants.length} constants)`);
+        }
+      } else {
+        // If no persisted context, initialize informationInput from default projectContext.information
+        setInformationInput(prev => prev || projectContext.information || "");
+      }
+    } catch (err) {
+      console.error('Failed to load persisted project context:', err);
+    }
+  }, [sessionId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -752,6 +834,18 @@ This automation project involves setting up a vision inspection system using KEY
     }
   }, [uploadedFiles, filesLoaded]);
 
+  // Persist projectContext to localStorage when it changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = `plc_copilot_context_${sessionId ?? 'default'}`;
+      localStorage.setItem(key, JSON.stringify(projectContext));
+      logTerminal(`Persisted project context (${projectContext.deviceConstants.length} constants)`);
+    } catch (e) {
+      console.error('Failed to persist project context:', e);
+    }
+  }, [projectContext, sessionId]);
+
   // Cleanup resize event listeners on unmount
   useEffect(() => {
     return () => {
@@ -974,13 +1068,41 @@ END_PROGRAM`}
                           if (obj.__constants) {
                             const sortedConsts = [...obj.__constants].sort((a: DeviceConstant, b: DeviceConstant) => a.name.localeCompare(b.name));
                             sortedConsts.forEach((constant: DeviceConstant) => {
+                              const isEditing = editingConstantId === constant.id;
                               elements.push(
                                 <div key={constant.id} className={`py-1 px-2 rounded text-sm bg-transparent hover:bg-gray-800/40 transition-colors ${level > 0 ? 'ml-4' : ''}`}>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-gray-300 font-mono">{constant.name}</span>
-                                    <span className="text-gray-400 font-mono">:</span>
-                                    <span className="text-gray-400 font-mono">{constant.value}</span>
-                                  </div>
+                                  {isEditing ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        value={editConstantName}
+                                        onChange={(e) => setEditConstantName(e.target.value)}
+                                        className="bg-gray-800 text-gray-200 placeholder-gray-400 px-2 py-1 rounded border border-gray-700 text-sm font-mono"
+                                      />
+                                      <input
+                                        value={editConstantValue}
+                                        onChange={(e) => setEditConstantValue(e.target.value)}
+                                        className="bg-gray-800 text-gray-200 placeholder-gray-400 px-2 py-1 rounded border border-gray-700 text-sm font-mono"
+                                      />
+                                      <button onClick={() => saveEditConstant(constant.id)} className="text-xs px-2 py-1 bg-orange-500 rounded text-white">Save</button>
+                                      <button onClick={cancelEditConstant} className="text-xs px-2 py-1 text-gray-400">Cancel</button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-gray-300 font-mono">{constant.name}</span>
+                                      <span className="text-gray-400 font-mono">:</span>
+                                      <span className="text-gray-400 font-mono">{constant.value}</span>
+                                      <button onClick={() => startEditConstant(constant)} title="Edit constant" className="ml-2 text-gray-400 hover:text-gray-200 p-1">
+                                        <Edit className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        onClick={() => deleteDeviceConstant(constant.id)}
+                                        title="Delete constant"
+                                        className="ml-1 text-red-400 hover:text-red-500 p-1"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             });
@@ -1005,8 +1127,14 @@ END_PROGRAM`}
                 <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto h-full">
                   <textarea
                     value={informationInput}
-                    onChange={(e) => setInformationInput(e.target.value)}
-                    placeholder="Add notes or project info..."
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInformationInput(val);
+                      setProjectContext(prev => ({ ...prev, information: val }));
+                    }}
+                    onFocus={() => setInformationPlaceholder("")}
+                    onBlur={() => { if (!informationInput) setInformationPlaceholder("Notes..."); }}
+                    placeholder={informationPlaceholder}
                     className="w-full h-full min-h-[200px] bg-transparent resize-none outline-none placeholder-gray-500 text-gray-200 text-sm"
                   />
                 </div>
