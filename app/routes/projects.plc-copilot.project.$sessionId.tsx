@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, createElement } from "react";
 import { useParams, Link, useSearchParams } from "@remix-run/react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   Send, 
   MessageSquare, 
@@ -780,7 +782,62 @@ END_PROGRAM`}
                       </div>
                     ) : (
                       <div className="max-w-[85%] text-gray-100">
-                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            // Headers
+                            h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
+                            h2: ({node, ...props}) => <h2 className="text-base font-semibold text-gray-200 mb-2" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-sm font-semibold text-gray-200 mb-1" {...props} />,
+                            h4: ({node, ...props}) => <h4 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
+                            h5: ({node, ...props}) => <h5 className="text-xs font-medium text-gray-200 mb-1" {...props} />,
+                            h6: ({node, ...props}) => <h6 className="text-xs font-medium text-gray-300 mb-1" {...props} />,
+                            
+                            // Text formatting
+                            p: ({node, ...props}) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
+                            strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />,
+                            b: ({node, ...props}) => <b className="font-semibold text-gray-200" {...props} />,
+                            em: ({node, ...props}) => <em className="italic text-gray-300" {...props} />,
+                            i: ({node, ...props}) => <i className="italic text-gray-300" {...props} />,
+                            
+                            // Code
+                            code: ({node, ...props}) => {
+                              // Check if this is inline code by looking at parent node
+                              const isInline = node?.position?.start?.line === node?.position?.end?.line;
+                              if (isInline) {
+                                return <code className="bg-gray-800 text-gray-300 px-1 py-0.5 rounded text-sm" {...props} />;
+                              }
+                              return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />;
+                            },
+                            pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />,
+                            
+                            // Lists
+                            ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                            ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                            li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
+                            
+                            // Other elements
+                            blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-2" {...props} />,
+                            a: ({node, ...props}) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
+                            hr: ({node, ...props}) => <hr className="border-0 border-t border-gray-700 my-3" {...props} />,
+                            
+                            // Tables (GFM support)
+                            table: ({node, ...props}) => <table className="border-collapse border border-gray-600 my-2" {...props} />,
+                            thead: ({node, ...props}) => <thead className="bg-gray-800" {...props} />,
+                            tbody: ({node, ...props}) => <tbody {...props} />,
+                            tr: ({node, ...props}) => <tr className="border-b border-gray-600" {...props} />,
+                            th: ({node, ...props}) => <th className="border border-gray-600 px-2 py-1 text-gray-200 font-medium text-left" {...props} />,
+                            td: ({node, ...props}) => <td className="border border-gray-600 px-2 py-1 text-gray-300" {...props} />,
+                            
+                            // Task lists (GFM support)
+                            input: ({node, ...props}) => <input className="mr-2" {...props} />,
+                            
+                            // Line breaks
+                            br: ({node, ...props}) => <br {...props} />,
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
                         <time className="text-xs opacity-50 mt-1 block text-gray-400">
                           {message.timestamp.toLocaleTimeString()}
                         </time>
@@ -842,13 +899,39 @@ END_PROGRAM`}
                                       : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
                                 }`}
                               >
-                                <div className="flex items-start gap-2">
+                                <div className="flex items-center gap-2">
                                   {message.isMultiSelect && (
-                                    <div className={`w-3 h-3 rounded-full border flex-shrink-0 mt-0.5 ${
+                                    <div className={`w-3 h-3 rounded-full border flex-shrink-0 ${
                                       isSelected ? "bg-white border-white" : "border-gray-400"
                                     }`} />
                                   )}
-                                  <span className="text-sm leading-relaxed">{option}</span>
+                                  <div className="text-sm leading-relaxed flex-1">
+                                    <ReactMarkdown 
+                                      remarkPlugins={[remarkGfm]}
+                                      components={{
+                                        // Inline-optimized components for MCQ buttons
+                                        p: ({node, ...props}) => <span className="text-current" {...props} />,
+                                        strong: ({node, ...props}) => <strong className="font-semibold text-current" {...props} />,
+                                        b: ({node, ...props}) => <b className="font-semibold text-current" {...props} />,
+                                        em: ({node, ...props}) => <em className="italic text-current" {...props} />,
+                                        i: ({node, ...props}) => <i className="italic text-current" {...props} />,
+                                        code: ({node, ...props}) => <code className="bg-gray-700 text-current px-1 rounded text-xs" {...props} />,
+                                        a: ({node, ...props}) => <a className="text-current underline" {...props} />,
+                                        // Remove block elements that don't make sense in buttons
+                                        h1: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                        h2: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                        h3: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                        ul: ({node, ...props}) => <span className="text-current" {...props} />,
+                                        ol: ({node, ...props}) => <span className="text-current" {...props} />,
+                                        li: ({node, ...props}) => <span className="text-current" {...props} />,
+                                        blockquote: ({node, ...props}) => <span className="italic text-current" {...props} />,
+                                        pre: ({node, ...props}) => <span className="font-mono text-current" {...props} />,
+                                        br: ({node, ...props}) => <span className="text-current" {...props} />,
+                                      }}
+                                    >
+                                      {option}
+                                    </ReactMarkdown>
+                                  </div>
                                 </div>
                               </button>
                             );
@@ -1036,7 +1119,62 @@ END_PROGRAM`}
                             </div>
                           ) : (
                             <div className="max-w-[85%] text-gray-100">
-                              <p className="whitespace-pre-wrap">{message.content}</p>
+                              <ReactMarkdown 
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  // Headers
+                                  h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
+                                  h2: ({node, ...props}) => <h2 className="text-base font-semibold text-gray-200 mb-2" {...props} />,
+                                  h3: ({node, ...props}) => <h3 className="text-sm font-semibold text-gray-200 mb-1" {...props} />,
+                                  h4: ({node, ...props}) => <h4 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
+                                  h5: ({node, ...props}) => <h5 className="text-xs font-medium text-gray-200 mb-1" {...props} />,
+                                  h6: ({node, ...props}) => <h6 className="text-xs font-medium text-gray-300 mb-1" {...props} />,
+                                  
+                                  // Text formatting
+                                  p: ({node, ...props}) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
+                                  strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />,
+                                  b: ({node, ...props}) => <b className="font-semibold text-gray-200" {...props} />,
+                                  em: ({node, ...props}) => <em className="italic text-gray-300" {...props} />,
+                                  i: ({node, ...props}) => <i className="italic text-gray-300" {...props} />,
+                                  
+                                  // Code
+                                  code: ({node, ...props}) => {
+                                    // Check if this is inline code by looking at parent node
+                                    const isInline = node?.position?.start?.line === node?.position?.end?.line;
+                                    if (isInline) {
+                                      return <code className="bg-gray-800 text-gray-300 px-1 py-0.5 rounded text-sm" {...props} />;
+                                    }
+                                    return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />;
+                                  },
+                                  pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />,
+                                  
+                                  // Lists
+                                  ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                                  ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                                  li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
+                                  
+                                  // Other elements
+                                  blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-2" {...props} />,
+                                  a: ({node, ...props}) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
+                                  hr: ({node, ...props}) => <hr className="border-0 border-t border-gray-700 my-3" {...props} />,
+                                  
+                                  // Tables (GFM support)
+                                  table: ({node, ...props}) => <table className="border-collapse border border-gray-600 my-2" {...props} />,
+                                  thead: ({node, ...props}) => <thead className="bg-gray-800" {...props} />,
+                                  tbody: ({node, ...props}) => <tbody {...props} />,
+                                  tr: ({node, ...props}) => <tr className="border-b border-gray-600" {...props} />,
+                                  th: ({node, ...props}) => <th className="border border-gray-600 px-2 py-1 text-gray-200 font-medium text-left" {...props} />,
+                                  td: ({node, ...props}) => <td className="border border-gray-600 px-2 py-1 text-gray-300" {...props} />,
+                                  
+                                  // Task lists (GFM support)
+                                  input: ({node, ...props}) => <input className="mr-2" {...props} />,
+                                  
+                                  // Line breaks
+                                  br: ({node, ...props}) => <br {...props} />,
+                                }}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
                               <time className="text-xs opacity-50 mt-1 block text-gray-400">
                                 {message.timestamp.toLocaleTimeString()}
                               </time>
@@ -1098,13 +1236,39 @@ END_PROGRAM`}
                                             : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
                                       }`}
                                     >
-                                      <div className="flex items-start gap-2">
+                                      <div className="flex items-center gap-2">
                                         {message.isMultiSelect && (
-                                          <div className={`w-3 h-3 rounded-full border flex-shrink-0 mt-0.5 ${
+                                          <div className={`w-3 h-3 rounded-full border flex-shrink-0 ${
                                             isSelected ? "bg-white border-white" : "border-gray-400"
                                           }`} />
                                         )}
-                                        <span className="text-sm leading-relaxed">{option}</span>
+                                        <div className="text-sm leading-relaxed flex-1">
+                                          <ReactMarkdown 
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                              // Inline-optimized components for MCQ buttons
+                                              p: ({node, ...props}) => <span className="text-current" {...props} />,
+                                              strong: ({node, ...props}) => <strong className="font-semibold text-current" {...props} />,
+                                              b: ({node, ...props}) => <b className="font-semibold text-current" {...props} />,
+                                              em: ({node, ...props}) => <em className="italic text-current" {...props} />,
+                                              i: ({node, ...props}) => <i className="italic text-current" {...props} />,
+                                              code: ({node, ...props}) => <code className="bg-gray-700 text-current px-1 rounded text-xs" {...props} />,
+                                              a: ({node, ...props}) => <a className="text-current underline" {...props} />,
+                                              // Remove block elements that don't make sense in buttons
+                                              h1: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                              h2: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                              h3: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                              ul: ({node, ...props}) => <span className="text-current" {...props} />,
+                                              ol: ({node, ...props}) => <span className="text-current" {...props} />,
+                                              li: ({node, ...props}) => <span className="text-current" {...props} />,
+                                              blockquote: ({node, ...props}) => <span className="italic text-current" {...props} />,
+                                              pre: ({node, ...props}) => <span className="font-mono text-current" {...props} />,
+                                              br: ({node, ...props}) => <span className="text-current" {...props} />,
+                                            }}
+                                          >
+                                            {option}
+                                          </ReactMarkdown>
+                                        </div>
                                       </div>
                                     </button>
                                   );
