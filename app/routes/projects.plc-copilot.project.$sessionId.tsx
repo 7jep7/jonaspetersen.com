@@ -333,6 +333,23 @@ export default function PLCCopilotProject() {
     return stageMapping[stage] || 'gathering_requirements';
   };
 
+  // Helper function to get the previous copilot message for API context
+  const getPreviousCopilotMessage = (): string | undefined => {
+    // For project_kickoff stage, there should be no previous message
+    if (currentStage === 'project_kickoff') {
+      return undefined;
+    }
+    
+    // Find the last assistant message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') {
+        return messages[i].content;
+      }
+    }
+    
+    return undefined;
+  };
+
   const logTerminal = (line: string) => {
     setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
   };
@@ -513,7 +530,8 @@ export default function PLCCopilotProject() {
           const blob = new Blob([f.content || ''], { type: f.type });
           const file = new File([blob], f.name, { type: f.type });
           return file;
-        }) : undefined
+        }) : undefined,
+        getPreviousCopilotMessage() // previous copilot message for context
       );
 
   // Log brief response summary
@@ -724,7 +742,8 @@ export default function PLCCopilotProject() {
           convertStageToApiFormat(currentStage),
           undefined, // no message
           stripped, // mcqResponses
-          undefined // no files
+          undefined, // no files
+          getPreviousCopilotMessage() // previous copilot message for context
         );
 
         logApiSummary('RECV', response.chat_message, response.updated_context);
@@ -837,7 +856,8 @@ export default function PLCCopilotProject() {
           const blob = new Blob([f.content || ''], { type: f.type });
           const file = new File([blob], f.name, { type: f.type });
           return file;
-        }) : undefined
+        }) : undefined,
+        getPreviousCopilotMessage() // previous copilot message for context
       );
       
       logApiSummary('RECV', response.chat_message, response.updated_context);

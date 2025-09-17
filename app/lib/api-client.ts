@@ -88,7 +88,8 @@ class PLCCopilotApiClient {
     stage: string,
     message?: string,
     mcqResponses?: string[],
-    files?: File[]
+    files?: File[],
+    previousCopilotMessage?: string
   ): Promise<ContextResponse> {
     const workingUrl = await this.findWorkingPort();
     
@@ -97,6 +98,7 @@ class PLCCopilotApiClient {
       
       if (message) formData.append('message', message);
       if (mcqResponses?.length) formData.append('mcq_responses', JSON.stringify(mcqResponses));
+      if (previousCopilotMessage) formData.append('previous_copilot_message', previousCopilotMessage);
       formData.append('current_context', JSON.stringify(context));
       formData.append('current_stage', stage);
       
