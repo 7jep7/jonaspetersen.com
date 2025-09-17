@@ -11,6 +11,7 @@ import {
   Network, 
   Box,
   Terminal,
+  Database,
   X,
   Paperclip,
   ArrowLeft,
@@ -40,16 +41,38 @@ interface UploadedFile {
   content?: string | null;
 }
 
-type OutputView = "chat" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin" | "terminal";
+interface DeviceConstant {
+  id: string;
+  path: string[];  // e.g., ["Device", "Vendor"] for hierarchical display
+  name: string;
+  value: string;
+  source?: string; // e.g., "datasheet", "conversation", "manual"
+}
 
-const outputViews = [
+interface ProjectContext {
+  deviceConstants: DeviceConstant[];
+  information: string; // Markdown text with notes and bullet points
+}
+
+type OutputView = "chat" | "logs" | "context" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin";
+
+// WIP tabs - for development process
+const wipViews = [
+  { id: "logs" as OutputView, icon: Terminal, name: "Logs", shortName: "L", description: "Copilot logs, errors, warnings" },
+  { id: "context" as OutputView, icon: Database, name: "Context", shortName: "C", description: "Project context: device constants and gathered information" }
+];
+
+// Result tabs - for code generation and refinement
+const resultViews = [
   { id: "structured-text" as OutputView, icon: FileText, name: "Structured Text", shortName: "ST", description: "IEC 61131-3 Structured Text programming language" },
   { id: "function-block" as OutputView, icon: GitBranch, name: "Function Block Diagram", shortName: "FBD", description: "Graphical programming with function blocks" },
   { id: "sequential-chart" as OutputView, icon: List, name: "Sequential Function Chart", shortName: "SFC", description: "Sequential control flow programming" },
   { id: "signal-mapping" as OutputView, icon: Network, name: "Signal Mapping", shortName: "MAP", description: "Input/output signal assignments" },
   { id: "digital-twin" as OutputView, icon: Box, name: "Digital Twin", shortName: "DT", description: "3D visualization and simulation" }
-  ,{ id: "terminal" as OutputView, icon: Terminal, name: "Terminal", shortName: "T", description: "Copilot logs, errors, warnings" }
 ];
+
+// Combined array for backward compatibility
+const outputViews = [...wipViews, ...resultViews];
 
 export default function PLCCopilotProject() {
   const { sessionId } = useParams();
@@ -73,6 +96,62 @@ export default function PLCCopilotProject() {
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  
+  // Context state
+  const [projectContext, setProjectContext] = useState<ProjectContext>({
+    deviceConstants: [
+      // Sample data for testing
+      {
+        id: "1",
+        path: ["Device"],
+        name: "Model",
+        value: "VS-C1500CX",
+        source: "datasheet"
+      },
+      {
+        id: "2", 
+        path: ["Device"],
+        name: "Vendor",
+        value: "KEYENCE",
+        source: "datasheet"
+      },
+      {
+        id: "3",
+        path: ["Device"],
+        name: "Class", 
+        value: "Camera",
+        source: "datasheet"
+      },
+      {
+        id: "4",
+        path: ["Interface"],
+        name: "Type",
+        value: "Ethernet/IP",
+        source: "conversation"
+      },
+      {
+        id: "5",
+        path: ["Interface"],
+        name: "Role",
+        value: "peripheral",
+        source: "conversation"
+      }
+    ],
+    information: `# Project Overview
+This automation project involves setting up a vision inspection system using KEYENCE cameras.
+
+## Key Requirements
+- Vision inspection for quality control
+- Integration with existing PLC system
+- Real-time data transmission
+- Error handling and alerts
+
+## Notes from Conversation
+- Customer prefers Ethernet/IP communication
+- System needs to handle 100 parts per minute
+- Integration with existing SCADA system required
+- Safety interlocks must be maintained`
+  });
 
   const logTerminal = (line: string) => {
     setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
@@ -533,6 +612,13 @@ export default function PLCCopilotProject() {
     // Log the stage transition succinctly and then perform it
     logTerminal(`STAGE: ${currentStage} -> ${newStage}${reason ? ` (${reason})` : ''}`);
     setCurrentStage(newStage);
+    
+    // Auto-switch to Structured Text view when entering code generation stage
+    if (newStage === 'code_generation' && activeView !== 'structured-text') {
+      setActiveView('structured-text');
+      logTerminal(`AUTO-SWITCH: View changed to Structured Text for code generation stage`);
+    }
+    
     // Here you could add API calls to update the backend stage
     console.log(`Stage transition: ${currentStage} -> ${newStage}`, reason);
   };
@@ -657,13 +743,13 @@ END_PROGRAM`}
             </div>
           </div>
         );
-      case "terminal":
+      case "logs":
         return (
           <div className="h-full p-6 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <Terminal className="w-5 h-5 text-orange-500" />
-                <h2 className="text-sm font-semibold">Copilot Terminal</h2>
+                <h2 className="text-sm font-semibold">Copilot Logs</h2>
                 <p className="text-xs text-gray-400">Logs, errors and warnings</p>
               </div>
               <div className="flex items-center gap-2">
@@ -688,6 +774,124 @@ END_PROGRAM`}
               ) : (
                 <pre className="text-gray-200 whitespace-pre-wrap break-words">{terminalLogs.join('\n')}</pre>
               )}
+            </div>
+          </div>
+        );
+      case "context":
+        return (
+          <div className="h-full p-6 flex flex-col min-h-0">
+            <div className="flex items-center gap-3 mb-4">
+              <Database className="w-5 h-5 text-orange-500" />
+              <h2 className="text-sm font-semibold">Project Context</h2>
+              <p className="text-xs text-gray-400">Device constants and gathered information</p>
+            </div>
+
+            <div className="flex-1 flex flex-col gap-4 min-h-0">
+              {/* Device Constants Section */}
+              <div className="flex-1 min-h-0">
+                <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                  <Box className="w-4 h-4" />
+                  Device Constants
+                </h3>
+                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto" style={{ height: '40%' }}>
+                  {projectContext.deviceConstants.length === 0 ? (
+                    <div className="text-gray-500 text-sm">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(() => {
+                        // Organize constants hierarchically
+                        const hierarchy: { [key: string]: any } = {};
+                        projectContext.deviceConstants.forEach(constant => {
+                          let current = hierarchy;
+                          constant.path.forEach((pathPart, index) => {
+                            if (index === constant.path.length - 1) {
+                              // Last part - store the constant
+                              if (!current.__constants) current.__constants = [];
+                              current.__constants.push(constant);
+                            } else {
+                              // Intermediate path - create nested object
+                              if (!current[pathPart]) current[pathPart] = {};
+                              current = current[pathPart];
+                            }
+                          });
+                        });
+
+                        // Render hierarchy
+                        const renderHierarchy = (obj: any, level = 0): JSX.Element[] => {
+                          const elements: JSX.Element[] = [];
+                          
+                          Object.keys(obj).forEach(key => {
+                            if (key === '__constants') {
+                              // Render constants at this level
+                              obj[key].forEach((constant: DeviceConstant) => {
+                                elements.push(
+                                  <div key={constant.id} className={`flex justify-between items-center py-1 px-2 rounded text-sm ${level > 0 ? 'ml-4 bg-gray-800' : 'bg-gray-800'}`}>
+                                    <span className="text-gray-300 font-mono">{constant.name}</span>
+                                    <span className="text-orange-400 font-mono">{constant.value}</span>
+                                  </div>
+                                );
+                              });
+                            } else {
+                              // Render section header
+                              elements.push(
+                                <div key={key} className={`${level > 0 ? 'ml-' + (level * 4) : ''}`}>
+                                  <div className="text-gray-200 font-medium py-1 text-sm">{key}</div>
+                                  <div className="ml-2">
+                                    {renderHierarchy(obj[key], level + 1)}
+                                  </div>
+                                </div>
+                              );
+                            }
+                          });
+                          
+                          return elements;
+                        };
+
+                        return renderHierarchy(hierarchy);
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Information Section */}
+              <div className="flex-1 min-h-0">
+                <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Information
+                </h3>
+                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto" style={{ height: '100%' }}>
+                  {projectContext.information.trim() === "" ? (
+                    <div className="text-gray-500 text-sm">No information gathered yet. Notes and insights will accumulate here as the dialogue progresses.</div>
+                  ) : (
+                    <div className="text-gray-200 text-sm prose prose-invert max-w-none prose-sm">
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          // Custom components for better styling
+                          h1: ({node, ...props}) => <h1 className="text-lg font-bold text-white mb-2" {...props} />,
+                          h2: ({node, ...props}) => <h2 className="text-base font-semibold text-white mb-2" {...props} />,
+                          h3: ({node, ...props}) => <h3 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
+                          p: ({node, ...props}) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
+                          ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1" {...props} />,
+                          ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1" {...props} />,
+                          li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
+                          code: ({node, ...props}) => {
+                            // Check if this is an inline code or block code
+                            const isInline = !props.className?.includes('language-');
+                            return isInline 
+                              ? <code className="bg-gray-800 text-orange-400 px-1 py-0.5 rounded text-xs font-mono" {...props} />
+                              : <code className="block bg-gray-800 text-gray-200 p-2 rounded text-xs font-mono overflow-x-auto" {...props} />;
+                          },
+                          strong: ({node, ...props}) => <strong className="font-semibold text-white" {...props} />,
+                        }}
+                      >
+                        {projectContext.information}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -1085,7 +1289,32 @@ END_PROGRAM`}
                 </div>
               </button>
               
-              {outputViews.map((view) => (
+              {/* WIP tabs - Left side */}
+              {wipViews.map((view) => (
+                <button
+                  key={view.id}
+                  onClick={() => setActiveView(view.id)}
+                  className={`group relative p-2 rounded-lg transition-colors flex-shrink-0 ${
+                    activeView === view.id 
+                      ? "bg-orange-500 text-white" 
+                      : "hover:bg-gray-800 text-gray-400"
+                  }`}
+                  title={view.name}
+                >
+                  <view.icon className="w-5 h-5" />
+                  
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30">
+                    {view.name}
+                  </div>
+                </button>
+              ))}
+              
+              {/* Separator */}
+              <div className="mx-2 w-px bg-gray-700 flex-shrink-0"></div>
+              
+              {/* Result tabs - Right side */}
+              {resultViews.map((view) => (
                 <button
                   key={view.id}
                   onClick={() => setActiveView(view.id)}
