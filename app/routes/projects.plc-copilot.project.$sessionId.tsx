@@ -11,12 +11,16 @@ import {
   Network, 
   Box,
   Terminal,
+  Database,
+  ChevronDown,
+  ChevronRight,
   X,
   Paperclip,
   ArrowLeft,
   SkipForward
 } from "lucide-react";
-import { apiClient, type ChatResponse } from "~/lib/api-client";
+import { Edit } from "lucide-react";
+import { apiClient, type ContextResponse, type ProjectContext as ApiProjectContext } from "~/lib/api-client";
 import { ConnectionStatus, ErrorMessage } from "~/components/ConnectionStatus";
 import { StageIndicator } from "~/components/StageIndicator";
 import { Button } from "~/components/ui/button";
@@ -40,16 +44,83 @@ interface UploadedFile {
   content?: string | null;
 }
 
-type OutputView = "chat" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin" | "terminal";
+// Helper functions to convert between UI format and API format
+const convertDeviceConstantsToApiFormat = (deviceConstants: DeviceConstant[]): Record<string, any> => {
+  const result: Record<string, any> = {};
+  deviceConstants.forEach(constant => {
+    const fullPath = [...constant.path, constant.name];
+    let current = result;
+    
+    // Navigate to the right location in the nested object
+    for (let i = 0; i < fullPath.length - 1; i++) {
+      const key = fullPath[i];
+      if (!current[key]) current[key] = {};
+      current = current[key];
+    }
+    
+    // Set the final value
+    current[fullPath[fullPath.length - 1]] = constant.value;
+  });
+  return result;
+};
 
-const outputViews = [
+const convertApiFormatToDeviceConstants = (device_constants: Record<string, any>): DeviceConstant[] => {
+  const result: DeviceConstant[] = [];
+  
+  const traverse = (obj: any, currentPath: string[] = []) => {
+    Object.entries(obj).forEach(([key, value]) => {
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        traverse(value, [...currentPath, key]);
+      } else {
+        result.push({
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          path: currentPath,
+          name: key,
+          value: String(value),
+          source: 'api'
+        });
+      }
+    });
+  };
+  
+  traverse(device_constants);
+  return result;
+};
+
+interface DeviceConstant {
+  id: string;
+  path: string[];  // e.g., ["Device", "Vendor"] for hierarchical display
+  name: string;
+  value: string;
+  source?: string; // e.g., "datasheet", "conversation", "manual"
+}
+
+interface ProjectContext {
+  device_constants: Record<string, any>; // Matches API format
+  information: string; // Markdown text with notes and bullet points
+  // Keep the legacy deviceConstants for UI purposes, will sync with device_constants
+  deviceConstants: DeviceConstant[];
+}
+
+type OutputView = "chat" | "logs" | "context" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin";
+
+// WIP tabs - for development process
+const wipViews = [
+  { id: "logs" as OutputView, icon: Terminal, name: "Logs", shortName: "L", description: "Copilot logs, errors, warnings" },
+  { id: "context" as OutputView, icon: Database, name: "Context", shortName: "C", description: "Project context: device constants and gathered information" }
+];
+
+// Result tabs - for code generation and refinement
+const resultViews = [
   { id: "structured-text" as OutputView, icon: FileText, name: "Structured Text", shortName: "ST", description: "IEC 61131-3 Structured Text programming language" },
   { id: "function-block" as OutputView, icon: GitBranch, name: "Function Block Diagram", shortName: "FBD", description: "Graphical programming with function blocks" },
   { id: "sequential-chart" as OutputView, icon: List, name: "Sequential Function Chart", shortName: "SFC", description: "Sequential control flow programming" },
   { id: "signal-mapping" as OutputView, icon: Network, name: "Signal Mapping", shortName: "MAP", description: "Input/output signal assignments" },
   { id: "digital-twin" as OutputView, icon: Box, name: "Digital Twin", shortName: "DT", description: "3D visualization and simulation" }
-  ,{ id: "terminal" as OutputView, icon: Terminal, name: "Terminal", shortName: "T", description: "Copilot logs, errors, warnings" }
 ];
+
+// Combined array for backward compatibility
+const outputViews = [...wipViews, ...resultViews];
 
 export default function PLCCopilotProject() {
   const { sessionId } = useParams();
@@ -62,17 +133,238 @@ export default function PLCCopilotProject() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedMcqOptions, setSelectedMcqOptions] = useState<{[messageId: string]: string[]}>({});
+  // Conversation stage management
+  const [currentStage, setCurrentStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed'>('gather_requirements');
+  const [nextStage, setNextStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed' | undefined>();
+  const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
+  const [generatedCode, setGeneratedCode] = useState<string>('');
+
   const [activeView, setActiveView] = useState<OutputView>(() => {
+    // If we're in kickoff or requirements gathering, show Context immediately to avoid a flash
+    const initialStage: string = 'gather_requirements'; // default stage when component mounts
+    if (initialStage === 'project_kickoff' || initialStage === 'gather_requirements') {
+      return 'context';
+    }
+
     // Default to chat on mobile, structured-text on desktop
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       return "chat";
     }
     return "structured-text";
   });
+
+  // New-constant input state (separate name and value fields)
+  const [newConstantPath, setNewConstantPath] = useState<string>("Device");
+  const [newConstantName, setNewConstantName] = useState<string>("");
+  const [newConstantValue, setNewConstantValue] = useState<string>("");
+
+  const addDeviceConstant = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    const name = newConstantName?.trim();
+    const value = newConstantValue?.trim();
+
+    if (!name || !value) {
+      logTerminal('Failed to add device constant - name and value are required');
+      return;
+    }
+
+    // Parse the name for dot notation (e.g., "Device.Interface.Type" -> path: ["Device", "Interface"], name: "Type")
+    const nameParts = name.split('.').map(p => p.trim()).filter(Boolean);
+    
+    let pathParts: string[];
+    let actualName: string;
+    
+    if (nameParts.length > 1) {
+      // Multi-level: last part is name, rest is path
+      actualName = nameParts.pop() || name;
+      pathParts = nameParts;
+    } else {
+      // Single level: top-level constant (empty path)
+      actualName = name;
+      pathParts = []; // Top-level
+    }
+
+    const newConst: DeviceConstant = {
+      id: Date.now().toString(),
+      path: pathParts,
+      name: actualName,
+      value,
+      source: 'manual'
+    };
+
+    setProjectContext(prev => {
+      const newDeviceConstants = [...prev.deviceConstants, newConst];
+      return {
+        ...prev,
+        deviceConstants: newDeviceConstants,
+        device_constants: convertDeviceConstantsToApiFormat(newDeviceConstants)
+      };
+    });
+
+    logTerminal(`Added device constant: ${pathParts.join('.')}.${actualName} = ${value}`);
+
+    // Reset Name/Value inputs (keep path)
+    setNewConstantName('');
+    setNewConstantValue('');
+  };
   const [initialApiCall, setInitialApiCall] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  
+  // Context state
+  const [projectContext, setProjectContext] = useState<ProjectContext>(() => {
+    const deviceConstants = [
+      // Sample data for testing
+      {
+        id: "1",
+        path: ["Device"],
+        name: "Model",
+        value: "VS-C1500CX",
+        source: "datasheet"
+      },
+      {
+        id: "2", 
+        path: ["Device"],
+        name: "Vendor",
+        value: "KEYENCE",
+        source: "datasheet"
+      },
+      {
+        id: "3",
+        path: ["Device"],
+        name: "Class", 
+        value: "Camera",
+        source: "datasheet"
+      },
+      {
+        id: "4",
+        path: ["Interface"],
+        name: "Type",
+        value: "Ethernet/IP",
+        source: "conversation"
+      },
+      {
+        id: "5",
+        path: ["Interface"],
+        name: "Role",
+        value: "peripheral",
+        source: "conversation"
+      }
+    ];
+    
+    const information = `# Project Overview
+This automation project involves setting up a vision inspection system using KEYENCE cameras.
+
+## Key Requirements
+- Vision inspection for quality control
+- Integration with existing PLC system
+- Real-time data transmission
+- Error handling and alerts
+
+## Notes from Conversation
+- Customer prefers Ethernet/IP communication
+- System needs to handle 100 parts per minute
+- Integration with existing SCADA system required
+- Safety interlocks must be maintained`;
+
+    return {
+      deviceConstants,
+      device_constants: convertDeviceConstantsToApiFormat(deviceConstants),
+      information
+    };
+  });
+
+  // Local editable information input (starts empty)
+  const [informationInput, setInformationInput] = useState<string>("");
+
+  // Collapsed state for hierarchy nodes (keyed by dot-path like 'Device' or 'Device.Interface')
+  const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
+
+  // Inline edit state for device constants
+  const [editingConstantId, setEditingConstantId] = useState<string | null>(null);
+  const [editConstantName, setEditConstantName] = useState<string>("");
+  const [editConstantValue, setEditConstantValue] = useState<string>("");
+
+  // Short subtle placeholder for Information textarea that clears on focus
+  const [informationPlaceholder, setInformationPlaceholder] = useState<string>("Notes...");
+
+  const toggleNode = (path: string) => {
+    setCollapsedNodes(prev => ({ ...prev, [path]: !prev[path] }));
+  };
+
+  // Delete a device constant by id
+  const deleteDeviceConstant = (id: string) => {
+    setProjectContext(prev => {
+      const newDeviceConstants = prev.deviceConstants.filter(dc => dc.id !== id);
+      return {
+        ...prev,
+        deviceConstants: newDeviceConstants,
+        device_constants: convertDeviceConstantsToApiFormat(newDeviceConstants)
+      };
+    });
+    logTerminal(`Deleted device constant ${id}`);
+  };
+
+  const startEditConstant = (constant: DeviceConstant) => {
+    const fullName = [...(constant.path || []), constant.name].join('.');
+    setEditingConstantId(constant.id);
+    setEditConstantName(fullName);
+    setEditConstantValue(constant.value);
+  };
+
+  const cancelEditConstant = () => {
+    setEditingConstantId(null);
+    setEditConstantName("");
+    setEditConstantValue("");
+  };
+
+  const saveEditConstant = (id: string) => {
+    const nameTrim = editConstantName.trim();
+    const valueTrim = editConstantValue.trim();
+    if (!nameTrim || !valueTrim) {
+      logTerminal('Edit cancelled - name and value required');
+      return;
+    }
+
+    const parts = nameTrim.split('.').map(p => p.trim()).filter(Boolean);
+    let newPath: string[] = [];
+    let newName = nameTrim;
+    if (parts.length > 1) {
+      newName = parts.pop() as string;
+      newPath = parts;
+    } else {
+      newPath = [];
+      newName = parts[0] || nameTrim;
+    }
+
+    setProjectContext(prev => {
+      const newDeviceConstants = prev.deviceConstants.map(dc => 
+        dc.id === id ? { ...dc, path: newPath, name: newName, value: valueTrim, source: 'manual' } : dc
+      );
+      return {
+        ...prev,
+        deviceConstants: newDeviceConstants,
+        device_constants: convertDeviceConstantsToApiFormat(newDeviceConstants)
+      };
+    });
+
+    logTerminal(`Edited device constant ${id} -> ${[...newPath, newName].join('.')} = ${valueTrim}`);
+    cancelEditConstant();
+  };
+
+  // Helper function to convert UI stage to API stage
+  const convertStageToApiFormat = (stage: typeof currentStage): string => {
+    const stageMapping: Record<typeof currentStage, string> = {
+      'project_kickoff': 'gathering_requirements',
+      'gather_requirements': 'gathering_requirements',
+      'code_generation': 'code_generation',
+      'refinement_testing': 'refinement_testing',
+      'completed': 'refinement_testing'
+    };
+    return stageMapping[stage] || 'gathering_requirements';
+  };
 
   const logTerminal = (line: string) => {
     setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
@@ -134,10 +426,7 @@ export default function PLCCopilotProject() {
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
   const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
   
-  // Conversation stage management
-  const [currentStage, setCurrentStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed'>('gather_requirements');
-  const [nextStage, setNextStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed' | undefined>();
-  const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
+  // ...existing code...
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiCallInProgressRef = useRef(false);
@@ -163,6 +452,29 @@ export default function PLCCopilotProject() {
       setFilesLoaded(true); // Mark files as loaded (even if empty)
     }
   }, []);
+
+  // Load persisted project context (device constants + information) for this session from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = `plc_copilot_context_${sessionId ?? 'default'}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed: ProjectContext = JSON.parse(raw);
+        // Only override if parsed looks valid
+        if (parsed && Array.isArray(parsed.deviceConstants)) {
+          setProjectContext(parsed);
+          setInformationInput(parsed.information || "");
+          logTerminal(`Loaded persisted project context (${parsed.deviceConstants.length} constants)`);
+        }
+      } else {
+        // If no persisted context, initialize informationInput from default projectContext.information
+        setInformationInput(prev => prev || projectContext.information || "");
+      }
+    } catch (err) {
+      console.error('Failed to load persisted project context:', err);
+    }
+  }, [sessionId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -222,30 +534,65 @@ export default function PLCCopilotProject() {
     try {
     // Log outgoing LLM request (concise)
     logApiSummary('SEND', userMessage.content);
-      // Call the real API - works for both initial and follow-up messages
-      const response: ChatResponse = await apiClient.chat({
-        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
-        model: "gpt-4o-mini",
-        temperature: 0.7,
-        max_completion_tokens: 1024
-      });
+      // Call the new context API - works for both initial and follow-up messages
+      const response: ContextResponse = await apiClient.updateContext(
+        projectContext,
+        convertStageToApiFormat(currentStage),
+        userMessage.content,
+        undefined, // mcqResponses
+        uploadedFiles.length > 0 ? uploadedFiles.map(f => {
+          // Convert UploadedFile to File object for API
+          const blob = new Blob([f.content || ''], { type: f.type });
+          const file = new File([blob], f.name, { type: f.type });
+          return file;
+        }) : undefined
+      );
 
   // Log brief response summary
-  logApiSummary('RECV', response.content);
+  logApiSummary('RECV', response.chat_message);
+      
+      // Update project context from API response
+      setProjectContext(prev => ({
+        ...response.updated_context,
+        deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+      }));
+      
+      // Update stage if changed
+      if (response.current_stage !== currentStage) {
+        // Map API stage names to UI stage names
+        const stageMapping: Record<string, typeof currentStage> = {
+          'gathering_requirements': 'gather_requirements',
+          'code_generation': 'code_generation',
+          'refinement_testing': 'refinement_testing'
+        };
+        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+        handleStageTransition(mappedStage, 'Backend updated stage');
+      }
+      
+      // Update progress if provided
+      if (response.gathering_requirements_progress !== undefined) {
+        setStageProgress({ confidence: response.gathering_requirements_progress });
+      }
+      
+      // Update generated code if provided
+      if (response.generated_code) {
+        setGeneratedCode(response.generated_code);
+        logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
+      }
       
       // Check if response contains MCQ and extract options
-      const mcqOptions = parseMCQ(response.content);
+      const mcqOptions = response.is_mcq ? response.mcq_options : null;
       if (mcqOptions && mcqOptions.length > 0) {
         logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
       }
       
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: response.content,
+        content: response.chat_message,
         role: "assistant",
         timestamp: new Date(),
         mcqOptions: mcqOptions || undefined,
-        isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined // Assume multi-select if >2 options
+        isMultiSelect: response.is_multiselect
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
@@ -325,35 +672,62 @@ export default function PLCCopilotProject() {
       logTerminal(`MCQ-only submission: ${allSelectedOptions.length} options selected, continuing conversation flow`);
 
       try {
-        // Construct prompt with MCQ selections as context (strip markdown before sending)
+        // Construct MCQ selections for API
         const stripped = allSelectedOptions.map(o => stripMarkdown(o));
-        const mcqBlock = `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`; // explicit delimiter for backend parsing
-        const mcqContext = `User selected the following options: ${stripped.join(', ')}`;
 
-        logApiSummary('SEND', `${mcqBlock} ${mcqContext}`);
+        logApiSummary('SEND', `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`);
 
-        const response: ChatResponse = await apiClient.chat({
-          user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext}. ${mcqBlock}. Continue the conversation based on these selections.`,
-          model: "gpt-4o-mini",
-          temperature: 0.7,
-          max_completion_tokens: 1024
-        });
+        const response: ContextResponse = await apiClient.updateContext(
+          projectContext,
+          convertStageToApiFormat(currentStage),
+          undefined, // no message
+          stripped, // mcqResponses
+          undefined // no files
+        );
 
-        logApiSummary('RECV', response.content);
+        logApiSummary('RECV', response.chat_message);
+        
+        // Update project context from API response
+        setProjectContext(prev => ({
+          ...response.updated_context,
+          deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+        }));
+        
+        // Update stage if changed
+        if (response.current_stage !== currentStage) {
+          const stageMapping: Record<string, typeof currentStage> = {
+            'gathering_requirements': 'gather_requirements',
+            'code_generation': 'code_generation',
+            'refinement_testing': 'refinement_testing'
+          };
+          const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+          handleStageTransition(mappedStage, 'Backend updated stage');
+        }
+        
+        // Update progress if provided
+        if (response.gathering_requirements_progress !== undefined) {
+          setStageProgress({ confidence: response.gathering_requirements_progress });
+        }
+        
+        // Update generated code if provided
+        if (response.generated_code) {
+          setGeneratedCode(response.generated_code);
+          logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
+        }
         
         // Check if response contains MCQ and extract options
-        const mcqOptions = parseMCQ(response.content);
+        const mcqOptions = response.is_mcq ? response.mcq_options : null;
         if (mcqOptions && mcqOptions.length > 0) {
           logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
         }
         
         const assistantMessage: Message = {
           id: Date.now().toString(),
-          content: response.content,
+          content: response.chat_message,
           role: "assistant",
           timestamp: new Date(),
           mcqOptions: mcqOptions || undefined,
-          isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined
+          isMultiSelect: response.is_multiselect
         };
         setMessages(prev => [...prev, assistantMessage]);
         
@@ -407,36 +781,69 @@ export default function PLCCopilotProject() {
     setLastError(null);
 
     try {
-      // Prepare MCQ context text (sent to backend only)
+      // Prepare MCQ context if selections exist
       const stripped = allSelectedOptions.length > 0 ? allSelectedOptions.map(o => stripMarkdown(o)) : [];
-      const mcqBlock = stripped.length > 0 ? `MCQ_SELECTIONS: ${stripped.join(' ||| ')}` : '';
-      const mcqContext = stripped.length > 0 ? `User selected the following options: ${stripped.join(', ')}` : '';
 
       // Log outgoing LLM request for submitted input (compact)
-      logApiSummary('SEND', `${mcqBlock} ${visibleContent}`);
+      logApiSummary('SEND', `${stripped.length > 0 ? `MCQ: ${stripped.join(', ')} + ` : ''}${visibleContent}`);
 
-      // Call the real API - include MCQ selections in the user_prompt but don't display them in the UI
-      const response: ChatResponse = await apiClient.chat({
-        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext} ${mcqBlock} User request: ${visibleContent}`,
-        model: "gpt-4o-mini",
-        temperature: 0.7,
-        max_completion_tokens: 1024
-      });
-      logApiSummary('RECV', response.content);
+      // Call the new context API - include MCQ selections
+      const response: ContextResponse = await apiClient.updateContext(
+        projectContext,
+        convertStageToApiFormat(currentStage),
+        visibleContent,
+        stripped.length > 0 ? stripped : undefined, // mcqResponses
+        uploadedFiles.length > 0 ? uploadedFiles.map(f => {
+          // Convert UploadedFile to File object for API
+          const blob = new Blob([f.content || ''], { type: f.type });
+          const file = new File([blob], f.name, { type: f.type });
+          return file;
+        }) : undefined
+      );
+      
+      logApiSummary('RECV', response.chat_message);
+
+      // Update project context from API response
+      setProjectContext(prev => ({
+        ...response.updated_context,
+        deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+      }));
+      
+      // Update stage if changed
+      if (response.current_stage !== currentStage) {
+        const stageMapping: Record<string, typeof currentStage> = {
+          'gathering_requirements': 'gather_requirements',
+          'code_generation': 'code_generation',
+          'refinement_testing': 'refinement_testing'
+        };
+        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+        handleStageTransition(mappedStage, 'Backend updated stage');
+      }
+      
+      // Update progress if provided
+      if (response.gathering_requirements_progress !== undefined) {
+        setStageProgress({ confidence: response.gathering_requirements_progress });
+      }
+      
+      // Update generated code if provided
+      if (response.generated_code) {
+        setGeneratedCode(response.generated_code);
+        logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
+      }
 
       // Check if response contains MCQ and extract options
-      const mcqOptions = parseMCQ(response.content);
+      const mcqOptions = response.is_mcq ? response.mcq_options : null;
       if (mcqOptions && mcqOptions.length > 0) {
         logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
       }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: response.content,
+        content: response.chat_message,
         role: "assistant",
         timestamp: new Date(),
         mcqOptions: mcqOptions || undefined,
-        isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined
+        isMultiSelect: response.is_multiselect
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
@@ -533,9 +940,26 @@ export default function PLCCopilotProject() {
     // Log the stage transition succinctly and then perform it
     logTerminal(`STAGE: ${currentStage} -> ${newStage}${reason ? ` (${reason})` : ''}`);
     setCurrentStage(newStage);
+    
+    // Auto-switch to Structured Text view when entering code generation stage
+    if (newStage === 'code_generation' && activeView !== 'structured-text') {
+      setActiveView('structured-text');
+      logTerminal(`AUTO-SWITCH: View changed to Structured Text for code generation stage`);
+    }
+    
     // Here you could add API calls to update the backend stage
     console.log(`Stage transition: ${currentStage} -> ${newStage}`, reason);
   };
+
+  // When entering the gather_requirements stage, open the Context results tab
+  useEffect(() => {
+    if (currentStage === 'gather_requirements' || currentStage === 'project_kickoff') {
+      if (activeView !== 'context') {
+        setActiveView('context');
+        logTerminal(`AUTO-SWITCH: View changed to Context for ${currentStage} stage`);
+      }
+    }
+  }, [currentStage]);
 
   // Handle skip to code button - sends a message and transitions stage
   const handleSkipToCode = async () => {
@@ -584,6 +1008,18 @@ export default function PLCCopilotProject() {
     }
   }, [uploadedFiles, filesLoaded]);
 
+  // Persist projectContext to localStorage when it changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = `plc_copilot_context_${sessionId ?? 'default'}`;
+      localStorage.setItem(key, JSON.stringify(projectContext));
+      logTerminal(`Persisted project context (${projectContext.deviceConstants.length} constants)`);
+    } catch (e) {
+      console.error('Failed to persist project context:', e);
+    }
+  }, [projectContext, sessionId]);
+
   // Cleanup resize event listeners on unmount
   useEffect(() => {
     return () => {
@@ -600,9 +1036,11 @@ export default function PLCCopilotProject() {
             <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1 overflow-hidden">
               <div className="flex-1 overflow-y-auto p-6 min-h-0">
                 <pre className="text-gray-200 whitespace-pre-wrap break-words">
-{`// Conveyor Belt Control System
-// Generated by PLC Copilot
+                  {generatedCode || `// No code generated yet
+// PLC Copilot will generate Structured Text code here
+// based on your requirements and device context.
 
+// Example placeholder:
 PROGRAM ConveyorControl
 VAR
     bStart          : BOOL := FALSE;      // Start button
@@ -610,7 +1048,6 @@ VAR
     bEmergencyStop  : BOOL := FALSE;      // E-stop
     bMotorRunning   : BOOL := FALSE;      // Motor status
     bSafetyOK       : BOOL := TRUE;       // Safety check
-    tMotorTimer     : TON;                // Motor timer
     
     // Inputs
     bStartButton    : BOOL;
@@ -657,13 +1094,13 @@ END_PROGRAM`}
             </div>
           </div>
         );
-      case "terminal":
+      case "logs":
         return (
           <div className="h-full p-6 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <Terminal className="w-5 h-5 text-orange-500" />
-                <h2 className="text-sm font-semibold">Copilot Terminal</h2>
+                <h2 className="text-sm font-semibold">Copilot Logs</h2>
                 <p className="text-xs text-gray-400">Logs, errors and warnings</p>
               </div>
               <div className="flex items-center gap-2">
@@ -688,6 +1125,199 @@ END_PROGRAM`}
               ) : (
                 <pre className="text-gray-200 whitespace-pre-wrap break-words">{terminalLogs.join('\n')}</pre>
               )}
+            </div>
+          </div>
+        );
+      case "context":
+        return (
+          <div className="h-full p-6 flex flex-col min-h-0">
+            <div className="flex items-center gap-3 mb-4">
+              <Database className="w-5 h-5 text-orange-500" />
+              <h2 className="text-sm font-semibold">Project Context</h2>
+              <p className="text-xs text-gray-400">Device constants and gathered information</p>
+            </div>
+
+            <div className="flex-1 flex gap-4 min-h-0">
+              {/* Device Constants Section - Left Side */}
+              <div className="flex-1 min-h-0">
+                <div className="mb-3">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2">
+                        <Box className="w-4 h-4 text-gray-300" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-300">Device Constants</div>
+                        </div>
+                      </div>
+                      <div />
+                    </div>
+                  </div>
+                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto h-full">
+                  {/* Inputs inside the hierarchy widget */}
+                  <form onSubmit={(e) => addDeviceConstant(e)} className="mb-1 flex items-center gap-2">
+                    {/* Path is fixed to 'Device' for now */}
+                    <input type="hidden" value={newConstantPath} />
+                    <div className="flex gap-2 flex-1 min-w-0">
+                      <input
+                        value={newConstantName}
+                        onChange={(e) => setNewConstantName(e.target.value)}
+                        className="flex-1 min-w-0 bg-gray-800 text-gray-200 placeholder-gray-400 px-3 py-1 rounded border border-gray-700 text-sm"
+                        placeholder="Device.Interface.Type"
+                        title="Constant name with dot notation for hierarchy"
+                      />
+                      <input
+                        value={newConstantValue}
+                        onChange={(e) => setNewConstantValue(e.target.value)}
+                        className="flex-1 min-w-0 bg-gray-800 text-gray-200 placeholder-gray-400 px-3 py-1 rounded border border-gray-700 text-sm"
+                        placeholder="VS-C1500CX"
+                        title="Constant value"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="flex-shrink-0 text-sm px-3 py-1 rounded bg-orange-500 hover:bg-orange-600 text-white"
+                      title="Add device constant"
+                    >
+                      Add
+                    </button>
+                  </form>
+                  <div className="text-xs text-gray-500 mt-1">Use dot notation in name field for hierarchy, e.g. <span className="font-mono">Device.Interface.Type</span></div>
+
+                  {projectContext.deviceConstants.length === 0 ? (
+                    <div className="text-gray-500 text-sm">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(() => {
+                        // Organize constants hierarchically
+                        const hierarchy: { [key: string]: any } = {};
+                        projectContext.deviceConstants.forEach(constant => {
+                          let current = hierarchy;
+                          
+                          // Navigate through the full path
+                          constant.path.forEach((pathPart) => {
+                            if (!current[pathPart]) current[pathPart] = {};
+                            current = current[pathPart];
+                          });
+                          
+                          // Add the constant at the final level
+                          if (!current.__constants) current.__constants = [];
+                          current.__constants.push(constant);
+                        });
+
+                        // Render hierarchy with alphabetical sorting
+                        const renderHierarchy = (obj: any, level = 0, pathPrefix = ''): JSX.Element[] => {
+                          const elements: JSX.Element[] = [];
+
+                          // Sort section keys (exclude '__constants')
+                          const sectionKeys = Object.keys(obj).filter(k => k !== '__constants').sort((a,b) => a.localeCompare(b));
+
+                          // Render each section with a collapsible header
+                          sectionKeys.forEach(key => {
+                            const nodePath = pathPrefix ? `${pathPrefix}.${key}` : key;
+                            const isCollapsed = !!collapsedNodes[nodePath];
+                            const hasChildren = Object.keys(obj[key]).filter(k => k !== '__constants').length > 0;
+                            const hasConstants = obj[key].__constants && obj[key].__constants.length > 0;
+
+                            elements.push(
+                              <div key={nodePath} className={`${level > 0 ? 'ml-4' : ''}`}>
+                                <div 
+                                  className="flex items-center gap-2 cursor-pointer select-none hover:bg-gray-800/20 rounded px-1 py-0.5" 
+                                  onClick={() => toggleNode(nodePath)}
+                                >
+                                  {(hasChildren || hasConstants) ? (
+                                    isCollapsed ? <ChevronRight className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />
+                                  ) : (
+                                    <div className="w-4 h-4" />
+                                  )}
+                                  <div className="text-gray-200 font-medium text-sm">{key}</div>
+                                </div>
+                                {!isCollapsed && (
+                                  <div className="ml-2">
+                                    {renderHierarchy(obj[key], level + 1, nodePath)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          });
+
+                          // Then render constants at this level, sorted alphabetically
+                          if (obj.__constants) {
+                            const sortedConsts = [...obj.__constants].sort((a: DeviceConstant, b: DeviceConstant) => a.name.localeCompare(b.name));
+                            sortedConsts.forEach((constant: DeviceConstant) => {
+                              const isEditing = editingConstantId === constant.id;
+                              elements.push(
+                                <div key={constant.id} className={`py-1 px-2 rounded text-sm bg-transparent hover:bg-gray-800/40 transition-colors ${level > 0 ? 'ml-4' : ''}`}>
+                                  {isEditing ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        value={editConstantName}
+                                        onChange={(e) => setEditConstantName(e.target.value)}
+                                        className="bg-gray-800 text-gray-200 placeholder-gray-400 px-2 py-1 rounded border border-gray-700 text-sm font-mono"
+                                      />
+                                      <input
+                                        value={editConstantValue}
+                                        onChange={(e) => setEditConstantValue(e.target.value)}
+                                        className="bg-gray-800 text-gray-200 placeholder-gray-400 px-2 py-1 rounded border border-gray-700 text-sm font-mono"
+                                      />
+                                      <button onClick={() => saveEditConstant(constant.id)} className="text-xs px-2 py-1 bg-orange-500 rounded text-white">Save</button>
+                                      <button onClick={cancelEditConstant} className="text-xs px-2 py-1 text-gray-400">Cancel</button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-gray-300 font-mono">{constant.name}</span>
+                                      <span className="text-gray-400 font-mono">:</span>
+                                      <span className="text-gray-400 font-mono">{constant.value}</span>
+                                      <button onClick={() => startEditConstant(constant)} title="Edit constant" className="ml-2 text-gray-400 hover:text-gray-200 p-1">
+                                        <Edit className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        onClick={() => deleteDeviceConstant(constant.id)}
+                                        title="Delete constant"
+                                        className="ml-1 text-red-400 hover:text-red-500 p-1"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            });
+                          }
+
+                          return elements;
+                        };
+
+                        return renderHierarchy(hierarchy);
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Information Section - Right Side */}
+              <div className="flex-1 min-h-0">
+                <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Information
+                </h3>
+                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto h-full">
+                  <textarea
+                    value={informationInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInformationInput(val);
+                      setProjectContext(prev => ({ 
+                        ...prev, 
+                        information: val,
+                        device_constants: prev.device_constants // Keep device_constants in sync
+                      }));
+                    }}
+                    onFocus={() => setInformationPlaceholder("")}
+                    onBlur={() => { if (!informationInput) setInformationPlaceholder("Notes..."); }}
+                    placeholder={informationPlaceholder}
+                    className="w-full h-full min-h-[200px] bg-transparent resize-none outline-none placeholder-gray-500 text-gray-200 text-sm"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -1085,7 +1715,32 @@ END_PROGRAM`}
                 </div>
               </button>
               
-              {outputViews.map((view) => (
+              {/* WIP tabs - Left side */}
+              {wipViews.map((view) => (
+                <button
+                  key={view.id}
+                  onClick={() => setActiveView(view.id)}
+                  className={`group relative p-2 rounded-lg transition-colors flex-shrink-0 ${
+                    activeView === view.id 
+                      ? "bg-orange-500 text-white" 
+                      : "hover:bg-gray-800 text-gray-400"
+                  }`}
+                  title={view.name}
+                >
+                  <view.icon className="w-5 h-5" />
+                  
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30">
+                    {view.name}
+                  </div>
+                </button>
+              ))}
+              
+              {/* Separator */}
+              <div className="mx-2 w-px bg-gray-700 flex-shrink-0"></div>
+              
+              {/* Result tabs - Right side */}
+              {resultViews.map((view) => (
                 <button
                   key={view.id}
                   onClick={() => setActiveView(view.id)}

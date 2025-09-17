@@ -4,31 +4,21 @@
 // Testing mode - set to true to enable localhost health checks in development
 const ENABLE_LOCALHOST_TESTING = false;
 
-interface ChatRequest {
-  user_prompt: string;
-  model?: string;
-  temperature?: number;
-  max_completion_tokens?: number;
+interface ProjectContext {
+  device_constants: Record<string, any>;
+  information: string;
 }
 
-interface ChatResponse {
-  model: string;
-  content: string;
-  usage: {
-    completion_tokens: number;
-    prompt_tokens: number;
-    total_tokens: number;
-    completion_tokens_details: {
-      accepted_prediction_tokens: number;
-      audio_tokens: number;
-      reasoning_tokens: number;
-      rejected_prediction_tokens: number;
-    };
-    prompt_tokens_details: {
-      audio_tokens: number;
-      cached_tokens: number;
-    };
-  };
+interface ContextResponse {
+  updated_context: ProjectContext;
+  chat_message: string;
+  gathering_requirements_progress?: number;
+  current_stage: 'gathering_requirements' | 'code_generation' | 'refinement_testing';
+  is_mcq: boolean;
+  is_multiselect: boolean;
+  mcq_question?: string;
+  mcq_options: string[];
+  generated_code?: string;
 }
 
 interface ApiError {
@@ -93,25 +83,30 @@ class PLCCopilotApiClient {
     }
   }
 
-  async chat(request: ChatRequest): Promise<ChatResponse> {
-    const requestBody = {
-      user_prompt: request.user_prompt,
-      model: request.model || 'gpt-4o-mini',
-      temperature: request.temperature || 0.7,
-      max_completion_tokens: request.max_completion_tokens || 1024
-    };
-
-    // Auto-detect the working URL
+  async updateContext(
+    context: ProjectContext,
+    stage: string,
+    message?: string,
+    mcqResponses?: string[],
+    files?: File[]
+  ): Promise<ContextResponse> {
     const workingUrl = await this.findWorkingPort();
-
+    
     try {
-      const response = await fetch(`${workingUrl}/api/v1/ai/chat`, {
+      const formData = new FormData();
+      
+      if (message) formData.append('message', message);
+      if (mcqResponses?.length) formData.append('mcq_responses', JSON.stringify(mcqResponses));
+      formData.append('current_context', JSON.stringify(context));
+      formData.append('current_stage', stage);
+      
+      if (files) {
+        files.forEach(file => formData.append('files', file));
+      }
+
+      const response = await fetch(`${workingUrl}/api/v1/context/update`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+        body: formData,
       });
 
       if (!response.ok) {
@@ -125,7 +120,7 @@ class PLCCopilotApiClient {
         throw new Error(errorMessage);
       }
 
-      const data: ChatResponse = await response.json();
+      const data: ContextResponse = await response.json();
       return data;
     } catch (error) {
       console.error('API request failed:', error);
@@ -165,4 +160,4 @@ class PLCCopilotApiClient {
 export const apiClient = new PLCCopilotApiClient();
 
 // Export types for use in components
-export type { ChatRequest, ChatResponse, ApiError };
+export type { ProjectContext, ContextResponse, ApiError };
