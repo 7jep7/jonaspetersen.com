@@ -92,6 +92,41 @@ export default function PLCCopilotProject() {
     }
     return "structured-text";
   });
+
+  // New-constant input state
+  const [newConstantPath, setNewConstantPath] = useState<string>("Device");
+  const [newConstantKV, setNewConstantKV] = useState<string>("Model=VS-C1500CX");
+
+  const addDeviceConstant = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    // Expect newConstantKV in form "Name=Value" (first '=' splits name and value)
+    const [nameRaw, ...valueParts] = newConstantKV.split('=');
+    const name = nameRaw?.trim();
+    const value = valueParts.join('=').trim();
+    if (!name || !value) {
+      logTerminal('Failed to add device constant - expected format Name=Value');
+      return;
+    }
+
+    const newConst: DeviceConstant = {
+      id: Date.now().toString(),
+      path: newConstantPath.split('.').map(p => p.trim()).filter(Boolean),
+      name,
+      value,
+      source: 'manual'
+    };
+
+    setProjectContext(prev => ({
+      ...prev,
+      deviceConstants: [...prev.deviceConstants, newConst]
+    }));
+
+    logTerminal(`Added device constant: ${newConst.path.join('.')} -> ${name}=${value}`);
+
+    // Reset KV input (keep path)
+    setNewConstantKV('');
+  };
   const [initialApiCall, setInitialApiCall] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
@@ -786,14 +821,44 @@ END_PROGRAM`}
               <p className="text-xs text-gray-400">Device constants and gathered information</p>
             </div>
 
-            <div className="flex-1 flex flex-col gap-4 min-h-0">
-              {/* Device Constants Section */}
+            <div className="flex-1 flex gap-4 min-h-0">
+              {/* Device Constants Section - Left Side */}
               <div className="flex-1 min-h-0">
-                <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
-                  <Box className="w-4 h-4" />
-                  Device Constants
-                </h3>
-                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto" style={{ height: '40%' }}>
+                <div className="mb-3">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2">
+                        <Box className="w-4 h-4 text-gray-300" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-300">Device Constants</div>
+                        </div>
+                      </div>
+                      <form onSubmit={(e) => { addDeviceConstant(e); }} className="flex items-center gap-2">
+                        <input
+                          value={newConstantPath}
+                          onChange={(e) => setNewConstantPath(e.target.value)}
+                          className="bg-gray-800 text-gray-200 placeholder-gray-500/60 px-3 py-1 rounded border border-gray-700 text-sm w-40"
+                          placeholder="Path (e.g. Device.Interface)"
+                          title="Hierarchy path - use dot notation"
+                        />
+                        <input
+                          value={newConstantKV}
+                          onChange={(e) => setNewConstantKV(e.target.value)}
+                          className="bg-gray-800 text-gray-200 placeholder-gray-500/60 px-3 py-1 rounded border border-gray-700 text-sm w-56"
+                          placeholder="Name=Value (e.g. Model=VS-C1500CX)"
+                          title="Enter in the format Name=Value"
+                        />
+                        <button
+                          type="submit"
+                          className="text-sm px-3 py-1 rounded bg-orange-500 hover:bg-orange-600 text-white"
+                          title="Add device constant"
+                        >
+                          Add
+                        </button>
+                      </form>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">Use dot notation for hierarchy, e.g. <span className="font-mono">Device.Interface</span></div>
+                  </div>
+                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto h-full">
                   {projectContext.deviceConstants.length === 0 ? (
                     <div className="text-gray-500 text-sm">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
                   ) : (
@@ -816,34 +881,41 @@ END_PROGRAM`}
                           });
                         });
 
-                        // Render hierarchy
+                        // Render hierarchy with alphabetical sorting
                         const renderHierarchy = (obj: any, level = 0): JSX.Element[] => {
                           const elements: JSX.Element[] = [];
-                          
-                          Object.keys(obj).forEach(key => {
-                            if (key === '__constants') {
-                              // Render constants at this level
-                              obj[key].forEach((constant: DeviceConstant) => {
-                                elements.push(
-                                  <div key={constant.id} className={`flex justify-between items-center py-1 px-2 rounded text-sm ${level > 0 ? 'ml-4 bg-gray-800' : 'bg-gray-800'}`}>
-                                    <span className="text-gray-300 font-mono">{constant.name}</span>
-                                    <span className="text-orange-400 font-mono">{constant.value}</span>
-                                  </div>
-                                );
-                              });
-                            } else {
-                              // Render section header
+
+                          // Sort section keys (exclude '__constants')
+                          const sectionKeys = Object.keys(obj).filter(k => k !== '__constants').sort((a,b) => a.localeCompare(b));
+
+                          // First render section headers
+                          sectionKeys.forEach(key => {
+                            elements.push(
+                              <div key={key} className={`${level > 0 ? 'ml-4' : ''}`}>
+                                <div className="text-gray-200 font-medium py-1 text-sm">{key}</div>
+                                <div className="ml-2">
+                                  {renderHierarchy(obj[key], level + 1)}
+                                </div>
+                              </div>
+                            );
+                          });
+
+                          // Then render constants at this level, sorted alphabetically
+                          if (obj.__constants) {
+                            const sortedConsts = [...obj.__constants].sort((a: DeviceConstant, b: DeviceConstant) => a.name.localeCompare(b.name));
+                            sortedConsts.forEach((constant: DeviceConstant) => {
                               elements.push(
-                                <div key={key} className={`${level > 0 ? 'ml-' + (level * 4) : ''}`}>
-                                  <div className="text-gray-200 font-medium py-1 text-sm">{key}</div>
-                                  <div className="ml-2">
-                                    {renderHierarchy(obj[key], level + 1)}
+                                <div key={constant.id} className={`py-1 px-2 rounded text-sm bg-gray-800`}>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-300 font-mono">{constant.name}</span>
+                                    <span className="text-gray-400 font-mono">:</span>
+                                    <span className="text-gray-400 font-mono">{constant.value}</span>
                                   </div>
                                 </div>
                               );
-                            }
-                          });
-                          
+                            });
+                          }
+
                           return elements;
                         };
 
@@ -854,13 +926,13 @@ END_PROGRAM`}
                 </div>
               </div>
 
-              {/* Information Section */}
+              {/* Information Section - Right Side */}
               <div className="flex-1 min-h-0">
                 <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
                   Information
                 </h3>
-                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto" style={{ height: '100%' }}>
+                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto h-full">
                   {projectContext.information.trim() === "" ? (
                     <div className="text-gray-500 text-sm">No information gathered yet. Notes and insights will accumulate here as the dialogue progresses.</div>
                   ) : (
