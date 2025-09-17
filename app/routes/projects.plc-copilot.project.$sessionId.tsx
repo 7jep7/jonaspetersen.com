@@ -220,6 +220,7 @@ export default function PLCCopilotProject() {
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const [contextLoaded, setContextLoaded] = useState(false); // Track if context has been loaded from localStorage
   
   // Context state
   const [projectContext, setProjectContext] = useState<ProjectContext>(() => {
@@ -457,6 +458,8 @@ export default function PLCCopilotProject() {
       }
     } catch (err) {
       console.error('Failed to load persisted project context:', err);
+    } finally {
+      setContextLoaded(true); // Mark context as loaded regardless of success/failure
     }
   }, [sessionId]);
 
@@ -518,7 +521,8 @@ export default function PLCCopilotProject() {
     try {
     // Log outgoing LLM request (concise)
     const cleanedContext = getCleanedProjectContext();
-    logApiSummary('SEND', userMessage.content, cleanedContext);
+    const previousMessage = getPreviousCopilotMessage();
+    logApiSummary('SEND', userMessage.content, cleanedContext, previousMessage);
       // Call the new context API - works for both initial and follow-up messages
       const response: ContextResponse = await apiClient.updateContext(
         getCleanedProjectContext(),
@@ -547,14 +551,15 @@ export default function PLCCopilotProject() {
       }));
       
       // Update stage if changed
-      if (response.current_stage !== currentStage) {
-        // Map API stage names to UI stage names
-        const stageMapping: Record<string, typeof currentStage> = {
-          'gathering_requirements': 'gather_requirements',
-          'code_generation': 'code_generation',
-          'refinement_testing': 'refinement_testing'
-        };
-        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+      // Map API stage names to UI stage names for comparison
+      const stageMapping: Record<string, typeof currentStage> = {
+        'gathering_requirements': 'gather_requirements',
+        'code_generation': 'code_generation',
+        'refinement_testing': 'refinement_testing'
+      };
+      const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+      
+      if (mappedStage !== currentStage) {
         handleStageTransition(mappedStage, 'Backend updated stage');
       }
       
@@ -661,7 +666,12 @@ export default function PLCCopilotProject() {
   // Helper function to intelligently truncate context for logging
   const truncateContext = (context: any, maxLength: number = 200): string => {
     try {
-      const contextStr = JSON.stringify(context);
+      // For logging, focus on the API format (device_constants) to avoid duplication
+      const cleanContext = {
+        device_constants: context.device_constants || {},
+        information: context.information || ""
+      };
+      const contextStr = JSON.stringify(cleanContext);
       if (contextStr.length <= maxLength) return contextStr;
       
       // Try to show structure while keeping it brief
@@ -675,11 +685,17 @@ export default function PLCCopilotProject() {
   };
 
   // Compact API summary logger used to produce a single-line send/receive entry
-  const logApiSummary = (direction: 'SEND' | 'RECV', contentSnippet: string, context?: any) => {
+  const logApiSummary = (direction: 'SEND' | 'RECV', contentSnippet: string, context?: any, previousCopilotMessage?: string) => {
     const ts = new Date().toLocaleTimeString();
     const short = contentSnippet.replace(/\s+/g, ' ').trim().slice(0, 80);
     const contextSummary = context ? ` | CTX: ${truncateContext(context)}` : '';
-    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}${contextSummary}`);
+    
+    // Add previous copilot message info for SEND operations (truncated)
+    const prevMsgSummary = direction === 'SEND' && previousCopilotMessage 
+      ? ` | PREV: ${previousCopilotMessage.replace(/\s+/g, ' ').trim().slice(0, 40)}${previousCopilotMessage.length > 40 ? '…' : ''}`
+      : '';
+    
+    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}${contextSummary}${prevMsgSummary}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -735,7 +751,7 @@ export default function PLCCopilotProject() {
         // Construct MCQ selections for API
   const stripped = allSelectedOptions.map(o => stripMarkdown(o));
 
-        logApiSummary('SEND', `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`, getCleanedProjectContext());
+        logApiSummary('SEND', `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`, getCleanedProjectContext(), getPreviousCopilotMessage());
 
         const response: ContextResponse = await apiClient.updateContext(
           getCleanedProjectContext(),
@@ -758,13 +774,15 @@ export default function PLCCopilotProject() {
         }));
         
         // Update stage if changed
-        if (response.current_stage !== currentStage) {
-          const stageMapping: Record<string, typeof currentStage> = {
-            'gathering_requirements': 'gather_requirements',
-            'code_generation': 'code_generation',
-            'refinement_testing': 'refinement_testing'
-          };
-          const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+        // Map API stage names to UI stage names for comparison
+        const stageMapping: Record<string, typeof currentStage> = {
+          'gathering_requirements': 'gather_requirements',
+          'code_generation': 'code_generation',
+          'refinement_testing': 'refinement_testing'
+        };
+        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+        
+        if (mappedStage !== currentStage) {
           handleStageTransition(mappedStage, 'Backend updated stage');
         }
         
@@ -843,7 +861,8 @@ export default function PLCCopilotProject() {
       const stripped = allSelectedOptions.length > 0 ? allSelectedOptions.map(o => stripMarkdown(o)) : [];
 
       // Log outgoing LLM request for submitted input (compact)
-      logApiSummary('SEND', `${stripped.length > 0 ? `MCQ: ${stripped.join(', ')} + ` : ''}${visibleContent}`, getCleanedProjectContext());
+      const previousMessage = getPreviousCopilotMessage();
+      logApiSummary('SEND', `${stripped.length > 0 ? `MCQ: ${stripped.join(', ')} + ` : ''}${visibleContent}`, getCleanedProjectContext(), previousMessage);
 
       // Call the new context API - include MCQ selections
       const response: ContextResponse = await apiClient.updateContext(
@@ -872,13 +891,15 @@ export default function PLCCopilotProject() {
       }));
       
       // Update stage if changed
-      if (response.current_stage !== currentStage) {
-        const stageMapping: Record<string, typeof currentStage> = {
-          'gathering_requirements': 'gather_requirements',
-          'code_generation': 'code_generation',
-          'refinement_testing': 'refinement_testing'
-        };
-        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+      // Map API stage names to UI stage names for comparison
+      const stageMapping: Record<string, typeof currentStage> = {
+        'gathering_requirements': 'gather_requirements',
+        'code_generation': 'code_generation',
+        'refinement_testing': 'refinement_testing'
+      };
+      const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+      
+      if (mappedStage !== currentStage) {
         handleStageTransition(mappedStage, 'Backend updated stage');
       }
       
@@ -1094,7 +1115,7 @@ export default function PLCCopilotProject() {
 
   // Persist projectContext to localStorage when it changes
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !contextLoaded) return;
     try {
       const key = `plc_copilot_context_${sessionId ?? 'default'}`;
       localStorage.setItem(key, JSON.stringify(projectContext));
@@ -1102,7 +1123,7 @@ export default function PLCCopilotProject() {
     } catch (e) {
       console.error('Failed to persist project context:', e);
     }
-  }, [projectContext, sessionId]);
+  }, [projectContext, sessionId, contextLoaded]);
 
   // Cleanup resize event listeners on unmount
   useEffect(() => {
