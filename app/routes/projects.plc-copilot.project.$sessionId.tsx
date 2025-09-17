@@ -223,50 +223,14 @@ export default function PLCCopilotProject() {
   
   // Context state
   const [projectContext, setProjectContext] = useState<ProjectContext>(() => {
-    const deviceConstants = [
-      // Sample data for testing
-      {
-        id: "1",
-        path: ["Device"],
-        name: "Model",
-        value: "VS-C1500CX",
-        source: "datasheet"
-      },
-      {
-        id: "2", 
-        path: ["Device"],
-        name: "Vendor",
-        value: "KEYENCE",
-        source: "datasheet"
-      },
-      {
-        id: "3",
-        path: ["Device"],
-        name: "Class", 
-        value: "Camera",
-        source: "datasheet"
-      },
-      {
-        id: "4",
-        path: ["Interface"],
-        name: "Type",
-        value: "Ethernet/IP",
-        source: "conversation"
-      },
-      {
-        id: "5",
-        path: ["Interface"],
-        name: "Role",
-        value: "peripheral",
-        source: "conversation"
-      }
-    ];
-    
+    // Start with empty device constants and information. Device constants will be
+    // populated from user inputs, datasheet parsing or API responses.
+    const deviceConstants: DeviceConstant[] = [];
     const information = "";
 
     return {
       deviceConstants,
-      device_constants: convertDeviceConstantsToApiFormat(deviceConstants),
+      device_constants: {},
       information
     };
   });
@@ -703,17 +667,31 @@ export default function PLCCopilotProject() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Collect all currently selected MCQ options
+    // Determine the active assistant message whose MCQ selections should be submitted.
+    // UI only allows interacting with the most recent assistant MCQ, so we should only
+    // send selections for that message to avoid leaking earlier answers.
     const allSelectedOptions: string[] = [];
     const mcqSelectionMessages: string[] = [];
-    
-    Object.keys(selectedMcqOptions).forEach(messageId => {
-      const selections = selectedMcqOptions[messageId];
-      if (selections && selections.length > 0) {
+
+    // Find the latest assistant message that has MCQ options and is interactive
+    let activeAssistantMessageId: string | null = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === 'assistant' && m.mcqOptions && m.mcqOptions.length > 0) {
+        // The UI treats the latest assistant (or the one directly before the latest user
+        // message) as the interactive MCQ. We'll pick this message id as the active one.
+        activeAssistantMessageId = m.id;
+        break;
+      }
+    }
+
+    if (activeAssistantMessageId) {
+      const selections = selectedMcqOptions[activeAssistantMessageId] || [];
+      if (selections.length > 0) {
         allSelectedOptions.push(...selections);
         mcqSelectionMessages.push(`Selected options: ${selections.join(', ')}`);
       }
-    });
+    }
     
     // Require either text input or MCQ selections
     if (!input.trim() && allSelectedOptions.length === 0) {
@@ -723,7 +701,7 @@ export default function PLCCopilotProject() {
     if (isLoading) return;
 
     // Handle MCQ-only submissions (no user message created)
-    if (!input.trim() && allSelectedOptions.length > 0) {
+  if (!input.trim() && allSelectedOptions.length > 0) {
       // Clear inputs but keep MCQ selections visible
       setInput("");
       setUploadedFiles([]);
@@ -737,7 +715,7 @@ export default function PLCCopilotProject() {
 
       try {
         // Construct MCQ selections for API
-        const stripped = allSelectedOptions.map(o => stripMarkdown(o));
+  const stripped = allSelectedOptions.map(o => stripMarkdown(o));
 
         logApiSummary('SEND', `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`, getCleanedProjectContext());
 
@@ -1266,10 +1244,10 @@ END_PROGRAM`}
                       Add
                     </button>
                   </form>
-                  <div className="text-xs text-gray-500 mt-1">Use dot notation in name field for hierarchy, e.g. <span className="font-mono">Device.Interface.Type</span></div>
+                  <div className="text-xs text-gray-500">Use dot notation in name field for hierarchy, e.g. <span className="font-mono">Device.Interface.Type</span></div>
 
                   {projectContext.deviceConstants.length === 0 ? (
-                    <div className="text-gray-500 text-sm">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
+                    <div className="text-gray-500 text-sm mt-3">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
                   ) : (
                     <div className="space-y-2">
                       {(() => {
