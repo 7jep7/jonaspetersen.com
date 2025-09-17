@@ -12,6 +12,8 @@ import {
   Box,
   Terminal,
   Database,
+  ChevronDown,
+  ChevronRight,
   X,
   Paperclip,
   ArrowLeft,
@@ -109,10 +111,26 @@ export default function PLCCopilotProject() {
       return;
     }
 
+    // Parse the name for dot notation (e.g., "Device.Interface.Type" -> path: ["Device", "Interface"], name: "Type")
+    const nameParts = name.split('.').map(p => p.trim()).filter(Boolean);
+    
+    let pathParts: string[];
+    let actualName: string;
+    
+    if (nameParts.length > 1) {
+      // Multi-level: last part is name, rest is path
+      actualName = nameParts.pop() || name;
+      pathParts = nameParts;
+    } else {
+      // Single level: top-level constant (empty path)
+      actualName = name;
+      pathParts = []; // Top-level
+    }
+
     const newConst: DeviceConstant = {
       id: Date.now().toString(),
-      path: newConstantPath.split('.').map(p => p.trim()).filter(Boolean),
-      name,
+      path: pathParts,
+      name: actualName,
       value,
       source: 'manual'
     };
@@ -122,7 +140,7 @@ export default function PLCCopilotProject() {
       deviceConstants: [...prev.deviceConstants, newConst]
     }));
 
-    logTerminal(`Added device constant: ${newConst.path.join('.')} -> ${name}=${value}`);
+    logTerminal(`Added device constant: ${pathParts.join('.')}.${actualName} = ${value}`);
 
     // Reset Name/Value inputs (keep path)
     setNewConstantName('');
@@ -188,6 +206,13 @@ This automation project involves setting up a vision inspection system using KEY
 - Integration with existing SCADA system required
 - Safety interlocks must be maintained`
   });
+
+  // Collapsed state for hierarchy nodes (keyed by dot-path like 'Device' or 'Device.Interface')
+  const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
+
+  const toggleNode = (path: string) => {
+    setCollapsedNodes(prev => ({ ...prev, [path]: !prev[path] }));
+  };
 
   const logTerminal = (line: string) => {
     setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
@@ -846,8 +871,8 @@ END_PROGRAM`}
                         value={newConstantName}
                         onChange={(e) => setNewConstantName(e.target.value)}
                         className="flex-1 min-w-0 bg-gray-800 text-gray-200 placeholder-gray-400 px-3 py-1 rounded border border-gray-700 text-sm"
-                        placeholder="Camera"
-                        title="Constant name"
+                        placeholder="Device.Interface.Type"
+                        title="Constant name with dot notation for hierarchy"
                       />
                       <input
                         value={newConstantValue}
@@ -865,7 +890,7 @@ END_PROGRAM`}
                       Add
                     </button>
                   </form>
-                  <div className="text-xs text-gray-500 mt-1">Use dot notation for hierarchy, e.g. <span className="font-mono">Device.Model</span></div>
+                  <div className="text-xs text-gray-500 mt-1">Use dot notation in name field for hierarchy, e.g. <span className="font-mono">Device.Interface.Type</span></div>
 
                   {projectContext.deviceConstants.length === 0 ? (
                     <div className="text-gray-500 text-sm">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
@@ -876,34 +901,50 @@ END_PROGRAM`}
                         const hierarchy: { [key: string]: any } = {};
                         projectContext.deviceConstants.forEach(constant => {
                           let current = hierarchy;
-                          constant.path.forEach((pathPart, index) => {
-                            if (index === constant.path.length - 1) {
-                              // Last part - store the constant
-                              if (!current.__constants) current.__constants = [];
-                              current.__constants.push(constant);
-                            } else {
-                              // Intermediate path - create nested object
-                              if (!current[pathPart]) current[pathPart] = {};
-                              current = current[pathPart];
-                            }
+                          
+                          // Navigate through the full path
+                          constant.path.forEach((pathPart) => {
+                            if (!current[pathPart]) current[pathPart] = {};
+                            current = current[pathPart];
                           });
+                          
+                          // Add the constant at the final level
+                          if (!current.__constants) current.__constants = [];
+                          current.__constants.push(constant);
                         });
 
                         // Render hierarchy with alphabetical sorting
-                        const renderHierarchy = (obj: any, level = 0): JSX.Element[] => {
+                        const renderHierarchy = (obj: any, level = 0, pathPrefix = ''): JSX.Element[] => {
                           const elements: JSX.Element[] = [];
 
                           // Sort section keys (exclude '__constants')
                           const sectionKeys = Object.keys(obj).filter(k => k !== '__constants').sort((a,b) => a.localeCompare(b));
 
-                          // First render section headers
+                          // Render each section with a collapsible header
                           sectionKeys.forEach(key => {
+                            const nodePath = pathPrefix ? `${pathPrefix}.${key}` : key;
+                            const isCollapsed = !!collapsedNodes[nodePath];
+                            const hasChildren = Object.keys(obj[key]).filter(k => k !== '__constants').length > 0;
+                            const hasConstants = obj[key].__constants && obj[key].__constants.length > 0;
+
                             elements.push(
-                              <div key={key} className={`${level > 0 ? 'ml-4' : ''}`}>
-                                <div className="text-gray-200 font-medium py-1 text-sm">{key}</div>
-                                <div className="ml-2">
-                                  {renderHierarchy(obj[key], level + 1)}
+                              <div key={nodePath} className={`${level > 0 ? 'ml-4' : ''}`}>
+                                <div 
+                                  className="flex items-center gap-2 cursor-pointer select-none hover:bg-gray-800/20 rounded px-1 py-0.5" 
+                                  onClick={() => toggleNode(nodePath)}
+                                >
+                                  {(hasChildren || hasConstants) ? (
+                                    isCollapsed ? <ChevronRight className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />
+                                  ) : (
+                                    <div className="w-4 h-4" />
+                                  )}
+                                  <div className="text-gray-200 font-medium text-sm">{key}</div>
                                 </div>
+                                {!isCollapsed && (
+                                  <div className="ml-2">
+                                    {renderHierarchy(obj[key], level + 1, nodePath)}
+                                  </div>
+                                )}
                               </div>
                             );
                           });
@@ -913,14 +954,14 @@ END_PROGRAM`}
                             const sortedConsts = [...obj.__constants].sort((a: DeviceConstant, b: DeviceConstant) => a.name.localeCompare(b.name));
                             sortedConsts.forEach((constant: DeviceConstant) => {
                               elements.push(
-                                  <div key={constant.id} className={`py-1 px-2 rounded text-sm bg-transparent hover:bg-gray-800/40 transition-colors`}>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-gray-300 font-mono">{constant.name}</span>
-                                      <span className="text-gray-400 font-mono">:</span>
-                                      <span className="text-gray-400 font-mono">{constant.value}</span>
-                                    </div>
+                                <div key={constant.id} className={`py-1 px-2 rounded text-sm bg-transparent hover:bg-gray-800/40 transition-colors ${level > 0 ? 'ml-4' : ''}`}>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-300 font-mono">{constant.name}</span>
+                                    <span className="text-gray-400 font-mono">:</span>
+                                    <span className="text-gray-400 font-mono">{constant.value}</span>
                                   </div>
-                                );
+                                </div>
+                              );
                             });
                           }
 
