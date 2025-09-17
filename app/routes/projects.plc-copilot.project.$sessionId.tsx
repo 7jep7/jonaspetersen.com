@@ -87,7 +87,18 @@ export default function PLCCopilotProject() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedMcqOptions, setSelectedMcqOptions] = useState<{[messageId: string]: string[]}>({});
+  // Conversation stage management
+  const [currentStage, setCurrentStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed'>('gather_requirements');
+  const [nextStage, setNextStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed' | undefined>();
+  const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
+
   const [activeView, setActiveView] = useState<OutputView>(() => {
+    // If we're in kickoff or requirements gathering, show Context immediately to avoid a flash
+    const initialStage: string = 'gather_requirements'; // default stage when component mounts
+    if (initialStage === 'project_kickoff' || initialStage === 'gather_requirements') {
+      return 'context';
+    }
+
     // Default to chat on mobile, structured-text on desktop
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       return "chat";
@@ -277,10 +288,7 @@ This automation project involves setting up a vision inspection system using KEY
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
   const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
   
-  // Conversation stage management
-  const [currentStage, setCurrentStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed'>('gather_requirements');
-  const [nextStage, setNextStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed' | undefined>();
-  const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
+  // ...existing code...
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const apiCallInProgressRef = useRef(false);
@@ -686,6 +694,16 @@ This automation project involves setting up a vision inspection system using KEY
     // Here you could add API calls to update the backend stage
     console.log(`Stage transition: ${currentStage} -> ${newStage}`, reason);
   };
+
+  // When entering the gather_requirements stage, open the Context results tab
+  useEffect(() => {
+    if (currentStage === 'gather_requirements' || currentStage === 'project_kickoff') {
+      if (activeView !== 'context') {
+        setActiveView('context');
+        logTerminal(`AUTO-SWITCH: View changed to Context for ${currentStage} stage`);
+      }
+    }
+  }, [currentStage]);
 
   // Handle skip to code button - sends a message and transitions stage
   const handleSkipToCode = async () => {
