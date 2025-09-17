@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "@remix-run/react";
 import { Send, Plus, Settings, MessageSquare, Paperclip, X, FileText } from "lucide-react";
 import { ConnectionStatus } from "~/components/ConnectionStatus";
@@ -168,6 +168,81 @@ export default function PLCCopilotIndex() {
     }
   };
 
+  // Animated placeholder hook for index page
+  const useAnimatedPlaceholder = (prefix: string, examples: string[], speed = 80, pause = 900) => {
+    // start with only the prefix so the typing animation is visible
+    const [text, setText] = useState(prefix);
+    useEffect(() => {
+      if (!examples || examples.length === 0) return;
+
+      let mounted = true;
+      const exampleIndexRef = { current: 0 };
+      const charIndexRef = { current: 0 };
+      const typingRef = { current: true };
+      const pauseRef = { current: 0 };
+
+      setText(prefix);
+
+      const intervalMs = Math.max(20, Math.floor(speed / 2));
+
+      const intervalId = window.setInterval(() => {
+        if (!mounted) return;
+        if (pauseRef.current > 0) {
+          pauseRef.current -= intervalMs;
+          return;
+        }
+
+        const currentExample = examples[exampleIndexRef.current % examples.length];
+
+        if (typingRef.current) {
+          // type forward
+          if (charIndexRef.current < currentExample.length) {
+            charIndexRef.current += 1;
+            setText(prefix + currentExample.slice(0, charIndexRef.current));
+          } else {
+            // reached end, pause then start deleting
+            typingRef.current = false;
+            pauseRef.current = pause;
+          }
+        } else {
+          // deleting
+          if (charIndexRef.current > 0) {
+            charIndexRef.current -= 1;
+            setText(prefix + currentExample.slice(0, charIndexRef.current));
+          } else {
+            // finished deleting, move to next example and start typing
+            typingRef.current = true;
+            exampleIndexRef.current += 1;
+            pauseRef.current = 200;
+          }
+        }
+      }, intervalMs);
+
+      return () => {
+        mounted = false;
+        window.clearInterval(intervalId);
+      };
+    }, [prefix, examples, speed, pause]);
+
+    return text;
+  };
+
+  // Example continuations for the animated placeholder (stable reference)
+  const placeholderExamples = useMemo(() => [
+    "a conveyor start/stop sequence.",
+    "a motor soft-start ramp.",
+    "a pallet indexing routine.",
+    "an emergency stop reset flow.",
+    "a sensor debouncing filter.",
+  ], []);
+
+  const animatedPlaceholder = useAnimatedPlaceholder(
+    "Ask copilot to automate ",
+    placeholderExamples,
+    50,
+    1000
+  );
+
   return (
     <div className="h-screen bg-gray-950 text-white flex flex-col relative overflow-hidden">
       {/* Header */}
@@ -218,9 +293,7 @@ export default function PLCCopilotIndex() {
                     <MessageSquare className="w-8 h-8 text-orange-500" />
                   </div>
                   <h2 className="text-xl font-medium text-white mb-2">Welcome to PLC Copilot</h2>
-                  <p className="text-sm">Your intelligent assistant for PLC programming and automation tasks.</p>
-                  <p className="text-sm mt-2">Ask questions about ladder logic, function blocks, or troubleshooting.</p>
-                </div>
+                  <p className="text-sm">Your intelligent assistant for PLC programming and automation tasks.</p>                </div>
               ) : (
                 <div className="space-y-6">
                   {messages.map((message) => (
@@ -283,7 +356,7 @@ export default function PLCCopilotIndex() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask about PLC programming, ladder logic, or automation..."
+                    placeholder={animatedPlaceholder}
                     className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-24 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400`}
                     rows={2}
                     style={{ minHeight: "64px", maxHeight: "120px" }}
