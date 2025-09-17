@@ -293,7 +293,7 @@ export default function PLCCopilotIndex() {
                     <MessageSquare className="w-8 h-8 text-orange-500" />
                   </div>
                   <h2 className="text-xl font-medium text-white mb-2">Welcome to PLC Copilot</h2>
-                  <p className="text-sm">Your intelligent assistant for PLC programming and automation tasks.</p>                </div>
+                  <p className="text-sm">Your intelligent assistant for programmable logic controllers and automation tasks.</p>                </div>
               ) : (
                 <div className="space-y-6">
                   {messages.map((message) => (

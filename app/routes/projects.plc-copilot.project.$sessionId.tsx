@@ -138,19 +138,27 @@ export default function PLCCopilotProject() {
   const [nextStage, setNextStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed' | undefined>();
   const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
   const [generatedCode, setGeneratedCode] = useState<string>('');
+  const [generateWarning, setGenerateWarning] = useState<string | null>(null);
 
   const [activeView, setActiveView] = useState<OutputView>(() => {
-    // If we're in kickoff or requirements gathering, show Context immediately to avoid a flash
+    // Determine initial view while respecting mobile UX:
+    // - On mobile (width < 1024) default to 'chat'
+    // - On non-mobile, if starting in kickoff/gather_requirements, show 'context' to avoid a flash
     const initialStage: string = 'gather_requirements'; // default stage when component mounts
-    if (initialStage === 'project_kickoff' || initialStage === 'gather_requirements') {
-      return 'context';
+    try {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+      if (isMobile) return 'chat';
+      if (initialStage === 'project_kickoff' || initialStage === 'gather_requirements') {
+        return 'context';
+      }
+      return 'structured-text';
+    } catch {
+      // If window isn't available (SSR), default to structured-text to be safe
+      if (initialStage === 'project_kickoff' || initialStage === 'gather_requirements') {
+        return 'context';
+      }
+      return 'structured-text';
     }
-
-    // Default to chat on mobile, structured-text on desktop
-    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-      return "chat";
-    }
-    return "structured-text";
   });
 
   // New-constant input state (separate name and value fields)
@@ -1004,10 +1012,22 @@ export default function PLCCopilotProject() {
 
   // When entering the gather_requirements stage, open the Context results tab
   useEffect(() => {
-    if (currentStage === 'gather_requirements' || currentStage === 'project_kickoff') {
-      if (activeView !== 'context') {
-        setActiveView('context');
-        logTerminal(`AUTO-SWITCH: View changed to Context for ${currentStage} stage`);
+    try {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+      // Only auto-switch to Context on non-mobile (desktop/tablet) devices
+      if (!isMobile && (currentStage === 'gather_requirements' || currentStage === 'project_kickoff')) {
+        if (activeView !== 'context') {
+          setActiveView('context');
+          logTerminal(`AUTO-SWITCH: View changed to Context for ${currentStage} stage`);
+        }
+      }
+    } catch (err) {
+      // If any issue determining viewport, fall back to previous behavior
+      if (currentStage === 'gather_requirements' || currentStage === 'project_kickoff') {
+        if (activeView !== 'context') {
+          setActiveView('context');
+          logTerminal(`AUTO-SWITCH: View changed to Context for ${currentStage} stage`);
+        }
       }
     }
   }, [currentStage]);
@@ -1032,6 +1052,21 @@ export default function PLCCopilotProject() {
     
     // Send the message to get LLM response
     await sendMessage(skipMessage);
+  };
+
+  // Handler for mobile 'Generate' button which should check stage progress
+  const handleGenerateClick = async () => {
+    // minimum required confidence (backend: gathering_requirements_estimated_progress)
+    const minConfidence = 0.5;
+    const confidence = stageProgress?.confidence ?? 0;
+    if (confidence < minConfidence) {
+      setGenerateWarning('Provide a bit more project information before generating code.');
+      setTimeout(() => setGenerateWarning(null), 3000);
+      return;
+    }
+
+    // If sufficient progress, behave like Skip to Code
+    await handleSkipToCode();
   };
 
   const removeFile = (fileId: string) => {
@@ -1188,7 +1223,7 @@ END_PROGRAM`}
               <p className="text-xs text-gray-400">Device constants and gathered information</p>
             </div>
 
-            <div className="flex-1 flex gap-4 min-h-0">
+            <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
               {/* Device Constants Section - Left Side */}
               <div className="flex-1 min-h-0">
                 <div className="mb-3">
@@ -1719,7 +1754,20 @@ END_PROGRAM`}
                 {/* Send button - exact same positioning as index page */}
                 <button
                   type="submit"
-                  disabled={(!input.trim() && Object.values(selectedMcqOptions).every(options => !options || options.length === 0)) || isLoading}
+                  disabled={((): boolean => {
+                    // Allow MCQ-only submissions on mobile (window width < 1024)
+                    try {
+                      const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+                      const hasMcqSelection = !Object.values(selectedMcqOptions).every(options => !options || options.length === 0);
+                      // If not mobile, require either text or MCQ selection. On mobile, allow submit when MCQ selections exist even if input is empty.
+                      if (isMobile) {
+                        return !(input.trim() || hasMcqSelection) || isLoading;
+                      }
+                      return (!input.trim() && !hasMcqSelection) || isLoading;
+                    } catch {
+                      return (!input.trim() && Object.values(selectedMcqOptions).every(options => !options || options.length === 0)) || isLoading;
+                    }
+                  })()}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Send className="w-4 h-4" />
@@ -1810,12 +1858,32 @@ END_PROGRAM`}
               ))}
             </div>
           </div>
+          {/* (StageIndicator moved into Chat header for mobile) */}
 
           {/* Content Area - Scrollable */}
           <div className="flex-1 overflow-hidden min-h-0">
             {activeView === "chat" ? (
               /* Chat view for mobile - Full height with fixed input */
               <div className="h-full flex flex-col lg:hidden">
+                {/* Mobile Chat Header - Stage indicator */}
+                <div className="px-4 py-2 border-b border-gray-800 bg-gray-950 flex flex-col items-center">
+                  <div className="w-full flex items-center justify-center">
+                    <StageIndicator currentStage={currentStage} nextStage={nextStage} confidence={stageProgress?.confidence} />
+                  </div>
+                  <div className="w-full mt-2 flex items-center justify-center">
+                    <button
+                      onClick={handleGenerateClick}
+                      className={`text-sm px-3 py-1 rounded bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50 ${isLoading || apiCallInProgress ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      disabled={isLoading || apiCallInProgress}
+                      title="Generate Structured Text"
+                    >
+                      Generate
+                    </button>
+                  </div>
+                  {generateWarning && (
+                    <div className="mt-2 text-xs text-yellow-300">{generateWarning}</div>
+                  )}
+                </div>
                 {/* Messages - Scrollable area */}
                   <div className="flex-1 overflow-y-auto px-4 py-6 min-h-0 relative">
                     {/* Files are now shown above individual messages */}
@@ -2114,7 +2182,25 @@ END_PROGRAM`}
                       {/* Send button - match index page positioning */}
                       <button
                         type="submit"
-                        disabled={!(selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? '').trim() : input.trim()) || isLoading}
+                        disabled={((): boolean => {
+                          try {
+                            const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+                            const hasMcqSelection = !Object.values(selectedMcqOptions).every(options => !options || options.length === 0);
+
+                            // If editing a file, require file content unless mobile and MCQ selections exist
+                            if (selectedFileId) {
+                              const fileContent = (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? '').trim();
+                              if (isMobile) return !(fileContent || hasMcqSelection) || isLoading;
+                              return !fileContent || isLoading;
+                            }
+
+                            // Not editing a file: consider input or MCQ selections
+                            if (isMobile) return !(input.trim() || hasMcqSelection) || isLoading;
+                            return !input.trim() || isLoading;
+                          } catch {
+                            return !(selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? '').trim() : input.trim()) || isLoading;
+                          }
+                        })()}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         <Send className="w-4 h-4" />
