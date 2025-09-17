@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, createElement } from "react";
 import { useParams, Link, useSearchParams } from "@remix-run/react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   Send, 
   MessageSquare, 
@@ -26,6 +28,8 @@ interface Message {
   timestamp: Date;
   hasFiles?: boolean;
   attachedFiles?: { name: string; type: string }[]; // Store file info with message
+  mcqOptions?: string[]; // MCQ options for assistant messages
+  isMultiSelect?: boolean; // Whether MCQ allows multiple selections
 }
 
 interface UploadedFile {
@@ -57,6 +61,7 @@ export default function PLCCopilotProject() {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [selectedMcqOptions, setSelectedMcqOptions] = useState<{[messageId: string]: string[]}>({});
   const [activeView, setActiveView] = useState<OutputView>(() => {
     // Default to chat on mobile, structured-text on desktop
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
@@ -215,8 +220,8 @@ export default function PLCCopilotProject() {
     setLastError(null);
 
     try {
-      // Log outgoing LLM request (concise)
-  logTerminal(`SEND LLM [${currentStage}] -> ${buildPromptModifier(currentStage)} model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
+    // Log outgoing LLM request (concise)
+    logApiSummary('SEND', userMessage.content);
       // Call the real API - works for both initial and follow-up messages
       const response: ChatResponse = await apiClient.chat({
         user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
@@ -225,21 +230,24 @@ export default function PLCCopilotProject() {
         max_completion_tokens: 1024
       });
 
-      // Log brief response summary
-      logTerminal(`RECV LLM <- length=${response.content.length}`);
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: response.content,
-        role: "assistant",
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, assistantMessage]);
+  // Log brief response summary
+  logApiSummary('RECV', response.content);
       
-      // Check if response contains MCQ and log options
+      // Check if response contains MCQ and extract options
       const mcqOptions = parseMCQ(response.content);
       if (mcqOptions && mcqOptions.length > 0) {
         logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
       }
+      
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: response.content,
+        role: "assistant",
+        timestamp: new Date(),
+        mcqOptions: mcqOptions || undefined,
+        isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined // Assume multi-select if >2 options
+      };
+      setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('API call failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -260,53 +268,177 @@ export default function PLCCopilotProject() {
     }
   };
 
+  // Utility: strip simple markdown from MCQ option strings so backend receives clean text
+  const stripMarkdown = (s: string) => {
+    if (!s) return s;
+    // Remove bold/italic/inline code markers and links: **bold**, __bold__, *italic*, _italic_, `code`, [text](url)
+    return s
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/_(.*?)_/g, '$1')
+      .replace(/`(.*?)`/g, '$1')
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+      .trim();
+  };
+
+  // Compact API summary logger used to produce a single-line send/receive entry
+  const logApiSummary = (direction: 'SEND' | 'RECV', contentSnippet: string) => {
+    const ts = new Date().toLocaleTimeString();
+    const short = contentSnippet.replace(/\s+/g, ' ').trim().slice(0, 80);
+    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}`);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    
+    // Collect all currently selected MCQ options
+    const allSelectedOptions: string[] = [];
+    const mcqSelectionMessages: string[] = [];
+    
+    Object.keys(selectedMcqOptions).forEach(messageId => {
+      const selections = selectedMcqOptions[messageId];
+      if (selections && selections.length > 0) {
+        allSelectedOptions.push(...selections);
+        mcqSelectionMessages.push(`Selected options: ${selections.join(', ')}`);
+      }
+    });
+    
+    // Require either text input or MCQ selections
+    if (!input.trim() && allSelectedOptions.length === 0) {
+      return;
+    }
+    
+    if (isLoading) return;
+
+    // Handle MCQ-only submissions (no user message created)
+    if (!input.trim() && allSelectedOptions.length > 0) {
+      // Clear inputs but keep MCQ selections visible
+      setInput("");
+      setUploadedFiles([]);
+      localStorage.removeItem('plc_copilot_uploaded_files');
+      
+      setIsLoading(true);
+      setApiCallInProgress(true);
+      setLastError(null);
+      
+      logTerminal(`MCQ-only submission: ${allSelectedOptions.length} options selected, continuing conversation flow`);
+
+      try {
+        // Construct prompt with MCQ selections as context (strip markdown before sending)
+        const stripped = allSelectedOptions.map(o => stripMarkdown(o));
+        const mcqBlock = `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`; // explicit delimiter for backend parsing
+        const mcqContext = `User selected the following options: ${stripped.join(', ')}`;
+
+        logApiSummary('SEND', `${mcqBlock} ${mcqContext}`);
+
+        const response: ChatResponse = await apiClient.chat({
+          user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext}. ${mcqBlock}. Continue the conversation based on these selections.`,
+          model: "gpt-4o-mini",
+          temperature: 0.7,
+          max_completion_tokens: 1024
+        });
+
+        logApiSummary('RECV', response.content);
+        
+        // Check if response contains MCQ and extract options
+        const mcqOptions = parseMCQ(response.content);
+        if (mcqOptions && mcqOptions.length > 0) {
+          logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+        }
+        
+        const assistantMessage: Message = {
+          id: Date.now().toString(),
+          content: response.content,
+          role: "assistant",
+          timestamp: new Date(),
+          mcqOptions: mcqOptions || undefined,
+          isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        
+      } catch (error) {
+        console.error('API call failed:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        setLastError(errorMessage);
+        
+        const errorResponse: Message = {
+          id: Date.now().toString(),
+          content: `Error: ${errorMessage}. Please try again.`,
+          role: "assistant",
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorResponse]);
+      } finally {
+        setIsLoading(false);
+        setApiCallInProgress(false);
+      }
+      
+      return; // Exit early for MCQ-only submissions
+    }
+
+    // Handle text submissions (with optional MCQ selections)
+    // Show only the user's typed text in the UI. If MCQ selections exist, send them to the backend
+    // as additional context but don't duplicate them in the visible user message.
+    const visibleContent = input.trim();
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: input.trim(),
+      content: visibleContent,
       role: "user",
       timestamp: new Date(),
-      hasFiles: uploadedFiles.length > 0, // Track if this message had files
+      hasFiles: uploadedFiles.length > 0,
       attachedFiles: uploadedFiles.map(f => ({ name: f.name, type: f.type }))
     };
 
+    // Add only the typed message to the UI
     setMessages(prev => [...prev, userMessage]);
     setInput("");
-    setUploadedFiles([]); // Clear uploaded files immediately when message is sent
-    localStorage.removeItem('plc_copilot_uploaded_files'); // Clear from localStorage too
+    setUploadedFiles([]);
+    localStorage.removeItem('plc_copilot_uploaded_files');
+
+    // Log MCQ selections if present (they will be sent to the backend but not shown in the UI)
+    if (allSelectedOptions.length > 0) {
+      logTerminal(`MCQ submission: ${allSelectedOptions.length} options submitted with message`);
+    }
+
     setIsLoading(true);
     setApiCallInProgress(true);
     setLastError(null);
 
     try {
-      // Log outgoing LLM request for submitted input
-  logTerminal(`SEND LLM [${currentStage}] -> ${buildPromptModifier(currentStage)} model=gpt-4o-mini prompt=${userMessage.content.slice(0, 80).replace(/\n/g, ' ')}${userMessage.content.length > 80 ? '…' : ''}`);
-      // Call the real API - works for both initial and follow-up messages
+      // Prepare MCQ context text (sent to backend only)
+      const stripped = allSelectedOptions.length > 0 ? allSelectedOptions.map(o => stripMarkdown(o)) : [];
+      const mcqBlock = stripped.length > 0 ? `MCQ_SELECTIONS: ${stripped.join(' ||| ')}` : '';
+      const mcqContext = stripped.length > 0 ? `User selected the following options: ${stripped.join(', ')}` : '';
+
+      // Log outgoing LLM request for submitted input (compact)
+      logApiSummary('SEND', `${mcqBlock} ${visibleContent}`);
+
+      // Call the real API - include MCQ selections in the user_prompt but don't display them in the UI
       const response: ChatResponse = await apiClient.chat({
-        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
+        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext} ${mcqBlock} User request: ${visibleContent}`,
         model: "gpt-4o-mini",
         temperature: 0.7,
         max_completion_tokens: 1024
       });
+      logApiSummary('RECV', response.content);
 
-      logTerminal(`RECV LLM <- length=${response.content.length}`);
+      // Check if response contains MCQ and extract options
+      const mcqOptions = parseMCQ(response.content);
+      if (mcqOptions && mcqOptions.length > 0) {
+        logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+      }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response.content,
         role: "assistant",
-        timestamp: new Date()
+        timestamp: new Date(),
+        mcqOptions: mcqOptions || undefined,
+        isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined
       };
       setMessages(prev => [...prev, assistantMessage]);
-      
-      // Check if response contains MCQ and log options
-      const mcqOptions = parseMCQ(response.content);
-      if (mcqOptions && mcqOptions.length > 0) {
-        logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
-      }
     } catch (error) {
       console.error('API call failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -465,9 +597,9 @@ export default function PLCCopilotProject() {
       case "structured-text":
         return (
           <div className="h-full p-6 flex flex-col min-h-0">
-            <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1">
-              <div className="flex-1 overflow-y-auto p-6">
-                <pre className="text-gray-200 whitespace-pre-wrap">
+            <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-6 min-h-0">
+                <pre className="text-gray-200 whitespace-pre-wrap break-words">
 {`// Conveyor Belt Control System
 // Generated by PLC Copilot
 
@@ -550,11 +682,11 @@ END_PROGRAM`}
               </div>
             </div>
 
-            <div className="flex-1 bg-black bg-opacity-60 rounded-lg border border-gray-800 font-mono text-sm overflow-y-auto p-4">
+            <div className="flex-1 bg-black bg-opacity-60 rounded-lg border border-gray-800 font-mono text-sm overflow-y-auto p-4 min-h-0">
               {terminalLogs.length === 0 ? (
                 <div className="text-gray-500">No logs yet. Errors and warnings will appear here.</div>
               ) : (
-                <pre className="text-gray-200 whitespace-pre-wrap">{terminalLogs.join('\n')}</pre>
+                <pre className="text-gray-200 whitespace-pre-wrap break-words">{terminalLogs.join('\n')}</pre>
               )}
             </div>
           </div>
@@ -667,19 +799,173 @@ END_PROGRAM`}
                   )}
 
                   <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[85%] rounded-lg px-4 py-3 ${
-                        message.role === "user"
-                          ? "bg-orange-500 text-white"
-                          : "bg-gray-800 text-gray-100"
-                      }`}
-                    >
-                      <p className="whitespace-pre-wrap">{message.content}</p>
-                      <time className="text-xs opacity-70 mt-1 block">
-                        {message.timestamp.toLocaleTimeString()}
-                      </time>
-                    </div>
+                    {message.role === "user" ? (
+                      <div className="max-w-[85%] rounded-lg px-4 py-3 bg-orange-500 text-white">
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        <time className="text-xs opacity-70 mt-1 block">
+                          {message.timestamp.toLocaleTimeString()}
+                        </time>
+                      </div>
+                    ) : (
+                      <div className="max-w-[85%] text-gray-100">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            // Headers
+                            h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
+                            h2: ({node, ...props}) => <h2 className="text-base font-semibold text-gray-200 mb-2" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-sm font-semibold text-gray-200 mb-1" {...props} />,
+                            h4: ({node, ...props}) => <h4 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
+                            h5: ({node, ...props}) => <h5 className="text-xs font-medium text-gray-200 mb-1" {...props} />,
+                            h6: ({node, ...props}) => <h6 className="text-xs font-medium text-gray-300 mb-1" {...props} />,
+                            
+                            // Text formatting
+                            p: ({node, ...props}) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
+                            strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />,
+                            b: ({node, ...props}) => <b className="font-semibold text-gray-200" {...props} />,
+                            em: ({node, ...props}) => <em className="italic text-gray-300" {...props} />,
+                            i: ({node, ...props}) => <i className="italic text-gray-300" {...props} />,
+                            
+                            // Code
+                            code: ({node, ...props}) => {
+                              // Check if this is inline code by looking at parent node
+                              const isInline = node?.position?.start?.line === node?.position?.end?.line;
+                              if (isInline) {
+                                return <code className="bg-gray-800 text-gray-300 px-1 py-0.5 rounded text-sm" {...props} />;
+                              }
+                              return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />;
+                            },
+                            pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />,
+                            
+                            // Lists
+                            ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                            ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                            li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
+                            
+                            // Other elements
+                            blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-2" {...props} />,
+                            a: ({node, ...props}) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
+                            hr: ({node, ...props}) => <hr className="border-0 border-t border-gray-700 my-3" {...props} />,
+                            
+                            // Tables (GFM support)
+                            table: ({node, ...props}) => <table className="border-collapse border border-gray-600 my-2" {...props} />,
+                            thead: ({node, ...props}) => <thead className="bg-gray-800" {...props} />,
+                            tbody: ({node, ...props}) => <tbody {...props} />,
+                            tr: ({node, ...props}) => <tr className="border-b border-gray-600" {...props} />,
+                            th: ({node, ...props}) => <th className="border border-gray-600 px-2 py-1 text-gray-200 font-medium text-left" {...props} />,
+                            td: ({node, ...props}) => <td className="border border-gray-600 px-2 py-1 text-gray-300" {...props} />,
+                            
+                            // Task lists (GFM support)
+                            input: ({node, ...props}) => <input className="mr-2" {...props} />,
+                            
+                            // Line breaks
+                            br: ({node, ...props}) => <br {...props} />,
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                        <time className="text-xs opacity-50 mt-1 block text-gray-400">
+                          {message.timestamp.toLocaleTimeString()}
+                        </time>
+                      </div>
+                    )}
                   </div>
+
+                  {/* MCQ Options for assistant messages */}
+                  {message.role === "assistant" && message.mcqOptions && message.mcqOptions.length > 0 && (
+                    <div className="flex justify-start mt-3">
+                      <div className="max-w-[85%] space-y-2">
+                        <p className="text-sm text-gray-400 mb-2">
+                          {message.isMultiSelect ? "Select one or more options:" : "Select an option:"}
+                        </p>
+                        <div className="grid gap-2">
+                          {message.mcqOptions.map((option, optionIndex) => {
+                            const isSelected = selectedMcqOptions[message.id]?.includes(option) || false;
+                            // MCQ is only interactive if this is the latest assistant message
+                            const isLatestAssistantMessage = idx === messages.length - 1 || 
+                              (idx === messages.length - 2 && messages[messages.length - 1].role === "user");
+                            const isInteractive = isLatestAssistantMessage && !isLoading;
+                            
+                            return (
+                              <button
+                                key={optionIndex}
+                                disabled={!isInteractive}
+                                onClick={() => {
+                                  if (!isInteractive) return;
+                                  
+                                  const currentSelections = selectedMcqOptions[message.id] || [];
+                                  let newSelections: string[];
+                                  
+                                  if (message.isMultiSelect) {
+                                    // Multi-select: toggle option
+                                    if (isSelected) {
+                                      newSelections = currentSelections.filter(s => s !== option);
+                                    } else {
+                                      newSelections = [...currentSelections, option];
+                                    }
+                                  } else {
+                                    // Single-select: replace selection
+                                    newSelections = isSelected ? [] : [option];
+                                  }
+                                  
+                                  setSelectedMcqOptions(prev => ({
+                                    ...prev,
+                                    [message.id]: newSelections
+                                  }));
+                                  
+                                  logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
+                                }}
+                                className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                                  !isInteractive 
+                                    ? isSelected
+                                      ? "bg-orange-500/50 border-orange-500/50 text-white/70 cursor-not-allowed"
+                                      : "bg-gray-800/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
+                                    : isSelected
+                                      ? "bg-orange-500 border-orange-500 text-white"
+                                      : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {message.isMultiSelect && (
+                                    <div className={`w-3 h-3 rounded-full border flex-shrink-0 ${
+                                      isSelected ? "bg-white border-white" : "border-gray-400"
+                                    }`} />
+                                  )}
+                                  <div className="text-sm leading-relaxed flex-1">
+                                    <ReactMarkdown 
+                                      remarkPlugins={[remarkGfm]}
+                                      components={{
+                                        // Inline-optimized components for MCQ buttons
+                                        p: ({node, ...props}) => <span className="text-current" {...props} />,
+                                        strong: ({node, ...props}) => <strong className="font-semibold text-current" {...props} />,
+                                        b: ({node, ...props}) => <b className="font-semibold text-current" {...props} />,
+                                        em: ({node, ...props}) => <em className="italic text-current" {...props} />,
+                                        i: ({node, ...props}) => <i className="italic text-current" {...props} />,
+                                        code: ({node, ...props}) => <code className="bg-gray-700 text-current px-1 rounded text-xs" {...props} />,
+                                        a: ({node, ...props}) => <a className="text-current underline" {...props} />,
+                                        // Remove block elements that don't make sense in buttons
+                                        h1: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                        h2: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                        h3: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                        ul: ({node, ...props}) => <span className="text-current" {...props} />,
+                                        ol: ({node, ...props}) => <span className="text-current" {...props} />,
+                                        li: ({node, ...props}) => <span className="text-current" {...props} />,
+                                        blockquote: ({node, ...props}) => <span className="italic text-current" {...props} />,
+                                        pre: ({node, ...props}) => <span className="font-mono text-current" {...props} />,
+                                        br: ({node, ...props}) => <span className="text-current" {...props} />,
+                                      }}
+                                    >
+                                      {option}
+                                    </ReactMarkdown>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 );
               })}
@@ -754,7 +1040,7 @@ END_PROGRAM`}
                 {/* Send button - exact same positioning as index page */}
                 <button
                   type="submit"
-                  disabled={!input.trim() || isLoading}
+                  disabled={(!input.trim() && Object.values(selectedMcqOptions).every(options => !options || options.length === 0)) || isLoading}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Send className="w-4 h-4" />
@@ -850,19 +1136,173 @@ END_PROGRAM`}
                         )}
 
                         <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                          <div
-                            className={`max-w-[85%] rounded-lg px-4 py-3 ${
-                              message.role === "user"
-                                ? "bg-orange-500 text-white"
-                                : "bg-gray-800 text-gray-100"
-                            }`}
-                          >
-                            <p className="whitespace-pre-wrap">{message.content}</p>
-                            <time className="text-xs opacity-70 mt-1 block">
-                              {message.timestamp.toLocaleTimeString()}
-                            </time>
-                          </div>
+                          {message.role === "user" ? (
+                            <div className="max-w-[85%] rounded-lg px-4 py-3 bg-orange-500 text-white">
+                              <p className="whitespace-pre-wrap">{message.content}</p>
+                              <time className="text-xs opacity-70 mt-1 block">
+                                {message.timestamp.toLocaleTimeString()}
+                              </time>
+                            </div>
+                          ) : (
+                            <div className="max-w-[85%] text-gray-100">
+                              <ReactMarkdown 
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  // Headers
+                                  h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
+                                  h2: ({node, ...props}) => <h2 className="text-base font-semibold text-gray-200 mb-2" {...props} />,
+                                  h3: ({node, ...props}) => <h3 className="text-sm font-semibold text-gray-200 mb-1" {...props} />,
+                                  h4: ({node, ...props}) => <h4 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
+                                  h5: ({node, ...props}) => <h5 className="text-xs font-medium text-gray-200 mb-1" {...props} />,
+                                  h6: ({node, ...props}) => <h6 className="text-xs font-medium text-gray-300 mb-1" {...props} />,
+                                  
+                                  // Text formatting
+                                  p: ({node, ...props}) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
+                                  strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />,
+                                  b: ({node, ...props}) => <b className="font-semibold text-gray-200" {...props} />,
+                                  em: ({node, ...props}) => <em className="italic text-gray-300" {...props} />,
+                                  i: ({node, ...props}) => <i className="italic text-gray-300" {...props} />,
+                                  
+                                  // Code
+                                  code: ({node, ...props}) => {
+                                    // Check if this is inline code by looking at parent node
+                                    const isInline = node?.position?.start?.line === node?.position?.end?.line;
+                                    if (isInline) {
+                                      return <code className="bg-gray-800 text-gray-300 px-1 py-0.5 rounded text-sm" {...props} />;
+                                    }
+                                    return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />;
+                                  },
+                                  pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />,
+                                  
+                                  // Lists
+                                  ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                                  ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                                  li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
+                                  
+                                  // Other elements
+                                  blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-2" {...props} />,
+                                  a: ({node, ...props}) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
+                                  hr: ({node, ...props}) => <hr className="border-0 border-t border-gray-700 my-3" {...props} />,
+                                  
+                                  // Tables (GFM support)
+                                  table: ({node, ...props}) => <table className="border-collapse border border-gray-600 my-2" {...props} />,
+                                  thead: ({node, ...props}) => <thead className="bg-gray-800" {...props} />,
+                                  tbody: ({node, ...props}) => <tbody {...props} />,
+                                  tr: ({node, ...props}) => <tr className="border-b border-gray-600" {...props} />,
+                                  th: ({node, ...props}) => <th className="border border-gray-600 px-2 py-1 text-gray-200 font-medium text-left" {...props} />,
+                                  td: ({node, ...props}) => <td className="border border-gray-600 px-2 py-1 text-gray-300" {...props} />,
+                                  
+                                  // Task lists (GFM support)
+                                  input: ({node, ...props}) => <input className="mr-2" {...props} />,
+                                  
+                                  // Line breaks
+                                  br: ({node, ...props}) => <br {...props} />,
+                                }}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
+                              <time className="text-xs opacity-50 mt-1 block text-gray-400">
+                                {message.timestamp.toLocaleTimeString()}
+                              </time>
+                            </div>
+                          )}
                         </div>
+
+                        {/* MCQ Options for assistant messages */}
+                        {message.role === "assistant" && message.mcqOptions && message.mcqOptions.length > 0 && (
+                          <div className="flex justify-start mt-3">
+                            <div className="max-w-[85%] space-y-2">
+                              <p className="text-sm text-gray-400 mb-2">
+                                {message.isMultiSelect ? "Select one or more options:" : "Select an option:"}
+                              </p>
+                              <div className="grid gap-2">
+                                {message.mcqOptions.map((option, optionIndex) => {
+                                  const isSelected = selectedMcqOptions[message.id]?.includes(option) || false;
+                                  // MCQ is only interactive if this is the latest assistant message
+                                  const isLatestAssistantMessage = idx === messages.length - 1 || 
+                                    (idx === messages.length - 2 && messages[messages.length - 1].role === "user");
+                                  const isInteractive = isLatestAssistantMessage && !isLoading;
+                                  
+                                  return (
+                                    <button
+                                      key={optionIndex}
+                                      disabled={!isInteractive}
+                                      onClick={() => {
+                                        if (!isInteractive) return;
+                                        
+                                        const currentSelections = selectedMcqOptions[message.id] || [];
+                                        let newSelections: string[];
+                                        
+                                        if (message.isMultiSelect) {
+                                          // Multi-select: toggle option
+                                          if (isSelected) {
+                                            newSelections = currentSelections.filter(s => s !== option);
+                                          } else {
+                                            newSelections = [...currentSelections, option];
+                                          }
+                                        } else {
+                                          // Single-select: replace selection
+                                          newSelections = isSelected ? [] : [option];
+                                        }
+                                        
+                                        setSelectedMcqOptions(prev => ({
+                                          ...prev,
+                                          [message.id]: newSelections
+                                        }));
+                                        
+                                        logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
+                                      }}
+                                      className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                                        !isInteractive 
+                                          ? isSelected
+                                            ? "bg-orange-500/50 border-orange-500/50 text-white/70 cursor-not-allowed"
+                                            : "bg-gray-800/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
+                                          : isSelected
+                                            ? "bg-orange-500 border-orange-500 text-white"
+                                            : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        {message.isMultiSelect && (
+                                          <div className={`w-3 h-3 rounded-full border flex-shrink-0 ${
+                                            isSelected ? "bg-white border-white" : "border-gray-400"
+                                          }`} />
+                                        )}
+                                        <div className="text-sm leading-relaxed flex-1">
+                                          <ReactMarkdown 
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                              // Inline-optimized components for MCQ buttons
+                                              p: ({node, ...props}) => <span className="text-current" {...props} />,
+                                              strong: ({node, ...props}) => <strong className="font-semibold text-current" {...props} />,
+                                              b: ({node, ...props}) => <b className="font-semibold text-current" {...props} />,
+                                              em: ({node, ...props}) => <em className="italic text-current" {...props} />,
+                                              i: ({node, ...props}) => <i className="italic text-current" {...props} />,
+                                              code: ({node, ...props}) => <code className="bg-gray-700 text-current px-1 rounded text-xs" {...props} />,
+                                              a: ({node, ...props}) => <a className="text-current underline" {...props} />,
+                                              // Remove block elements that don't make sense in buttons
+                                              h1: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                              h2: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                              h3: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
+                                              ul: ({node, ...props}) => <span className="text-current" {...props} />,
+                                              ol: ({node, ...props}) => <span className="text-current" {...props} />,
+                                              li: ({node, ...props}) => <span className="text-current" {...props} />,
+                                              blockquote: ({node, ...props}) => <span className="italic text-current" {...props} />,
+                                              pre: ({node, ...props}) => <span className="font-mono text-current" {...props} />,
+                                              br: ({node, ...props}) => <span className="text-current" {...props} />,
+                                            }}
+                                          >
+                                            {option}
+                                          </ReactMarkdown>
+                                        </div>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       );
                     })}
