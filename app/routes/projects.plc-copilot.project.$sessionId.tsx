@@ -1866,26 +1866,32 @@ END_PROGRAM`}
               /* Chat view for mobile - Full height with fixed input */
               <div className="h-full flex flex-col lg:hidden">
                 {/* Mobile Chat Header - Stage indicator */}
-                <div className="px-4 py-2 border-b border-gray-800 bg-gray-950 flex flex-col items-center">
-                  <div className="w-full flex items-center justify-center">
-                    <StageIndicator currentStage={currentStage} nextStage={nextStage} confidence={stageProgress?.confidence} />
+                <div className="px-6 py-2 border-b border-gray-800 w-full">
+                  {/* Responsive row: stack on mobile, attempt inline on larger screens and wrap if needed */}
+                  <div className="flex flex-col lg:flex-row lg:flex-nowrap flex-wrap items-start lg:items-center justify-start gap-2 pl-2 lg:pl-0">
+                    <div className="flex items-start justify-start">
+                      <StageIndicator currentStage={currentStage} nextStage={nextStage} confidence={stageProgress?.confidence} />
+                    </div>
+
+                    <div className="flex items-start justify-start">
+                      <Button
+                        size="sm"
+                        onClick={handleGenerateClick}
+                        disabled={isLoading || apiCallInProgress}
+                        className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 bg-transparent disabled:opacity-50"
+                      >
+                        <SkipForward className="w-3 h-3 mr-1 text-gray-400" />
+                        <span className="align-middle">Skip to Code</span>
+                      </Button>
+                    </div>
                   </div>
-                  <div className="w-full mt-2 flex items-center justify-center">
-                    <button
-                      onClick={handleGenerateClick}
-                      className={`text-sm px-3 py-1 rounded bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50 ${isLoading || apiCallInProgress ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      disabled={isLoading || apiCallInProgress}
-                      title="Generate Structured Text"
-                    >
-                      Generate
-                    </button>
-                  </div>
+
                   {generateWarning && (
-                    <div className="mt-2 text-xs text-yellow-300">{generateWarning}</div>
+                    <div className="mt-2 text-xs text-yellow-300 text-left lg:text-center w-full px-2">{generateWarning}</div>
                   )}
                 </div>
                 {/* Messages - Scrollable area */}
-                  <div className="flex-1 overflow-y-auto px-4 py-6 min-h-0 relative">
+                  <div className="flex-1 overflow-y-auto px-6 py-6 min-h-0 relative">
                     {/* Files are now shown above individual messages */}
                   <div className="space-y-4 max-w-none pb-4">
                     {messages.map((message, idx) => {
