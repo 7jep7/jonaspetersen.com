@@ -20,7 +20,7 @@ import {
   SkipForward
 } from "lucide-react";
 import { Edit } from "lucide-react";
-import { apiClient, type ChatResponse } from "~/lib/api-client";
+import { apiClient, type ContextResponse, type ProjectContext as ApiProjectContext } from "~/lib/api-client";
 import { ConnectionStatus, ErrorMessage } from "~/components/ConnectionStatus";
 import { StageIndicator } from "~/components/StageIndicator";
 import { Button } from "~/components/ui/button";
@@ -44,6 +44,49 @@ interface UploadedFile {
   content?: string | null;
 }
 
+// Helper functions to convert between UI format and API format
+const convertDeviceConstantsToApiFormat = (deviceConstants: DeviceConstant[]): Record<string, any> => {
+  const result: Record<string, any> = {};
+  deviceConstants.forEach(constant => {
+    const fullPath = [...constant.path, constant.name];
+    let current = result;
+    
+    // Navigate to the right location in the nested object
+    for (let i = 0; i < fullPath.length - 1; i++) {
+      const key = fullPath[i];
+      if (!current[key]) current[key] = {};
+      current = current[key];
+    }
+    
+    // Set the final value
+    current[fullPath[fullPath.length - 1]] = constant.value;
+  });
+  return result;
+};
+
+const convertApiFormatToDeviceConstants = (device_constants: Record<string, any>): DeviceConstant[] => {
+  const result: DeviceConstant[] = [];
+  
+  const traverse = (obj: any, currentPath: string[] = []) => {
+    Object.entries(obj).forEach(([key, value]) => {
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        traverse(value, [...currentPath, key]);
+      } else {
+        result.push({
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          path: currentPath,
+          name: key,
+          value: String(value),
+          source: 'api'
+        });
+      }
+    });
+  };
+  
+  traverse(device_constants);
+  return result;
+};
+
 interface DeviceConstant {
   id: string;
   path: string[];  // e.g., ["Device", "Vendor"] for hierarchical display
@@ -53,8 +96,10 @@ interface DeviceConstant {
 }
 
 interface ProjectContext {
-  deviceConstants: DeviceConstant[];
+  device_constants: Record<string, any>; // Matches API format
   information: string; // Markdown text with notes and bullet points
+  // Keep the legacy deviceConstants for UI purposes, will sync with device_constants
+  deviceConstants: DeviceConstant[];
 }
 
 type OutputView = "chat" | "logs" | "context" | "structured-text" | "function-block" | "sequential-chart" | "signal-mapping" | "digital-twin";
@@ -92,6 +137,7 @@ export default function PLCCopilotProject() {
   const [currentStage, setCurrentStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed'>('gather_requirements');
   const [nextStage, setNextStage] = useState<'project_kickoff' | 'gather_requirements' | 'code_generation' | 'refinement_testing' | 'completed' | undefined>();
   const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
+  const [generatedCode, setGeneratedCode] = useState<string>('');
 
   const [activeView, setActiveView] = useState<OutputView>(() => {
     // If we're in kickoff or requirements gathering, show Context immediately to avoid a flash
@@ -147,10 +193,14 @@ export default function PLCCopilotProject() {
       source: 'manual'
     };
 
-    setProjectContext(prev => ({
-      ...prev,
-      deviceConstants: [...prev.deviceConstants, newConst]
-    }));
+    setProjectContext(prev => {
+      const newDeviceConstants = [...prev.deviceConstants, newConst];
+      return {
+        ...prev,
+        deviceConstants: newDeviceConstants,
+        device_constants: convertDeviceConstantsToApiFormat(newDeviceConstants)
+      };
+    });
 
     logTerminal(`Added device constant: ${pathParts.join('.')}.${actualName} = ${value}`);
 
@@ -164,8 +214,8 @@ export default function PLCCopilotProject() {
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   
   // Context state
-  const [projectContext, setProjectContext] = useState<ProjectContext>({
-    deviceConstants: [
+  const [projectContext, setProjectContext] = useState<ProjectContext>(() => {
+    const deviceConstants = [
       // Sample data for testing
       {
         id: "1",
@@ -202,8 +252,9 @@ export default function PLCCopilotProject() {
         value: "peripheral",
         source: "conversation"
       }
-    ],
-    information: `# Project Overview
+    ];
+    
+    const information = `# Project Overview
 This automation project involves setting up a vision inspection system using KEYENCE cameras.
 
 ## Key Requirements
@@ -216,7 +267,13 @@ This automation project involves setting up a vision inspection system using KEY
 - Customer prefers Ethernet/IP communication
 - System needs to handle 100 parts per minute
 - Integration with existing SCADA system required
-- Safety interlocks must be maintained`
+- Safety interlocks must be maintained`;
+
+    return {
+      deviceConstants,
+      device_constants: convertDeviceConstantsToApiFormat(deviceConstants),
+      information
+    };
   });
 
   // Local editable information input (starts empty)
@@ -239,10 +296,14 @@ This automation project involves setting up a vision inspection system using KEY
 
   // Delete a device constant by id
   const deleteDeviceConstant = (id: string) => {
-    setProjectContext(prev => ({
-      ...prev,
-      deviceConstants: prev.deviceConstants.filter(dc => dc.id !== id)
-    }));
+    setProjectContext(prev => {
+      const newDeviceConstants = prev.deviceConstants.filter(dc => dc.id !== id);
+      return {
+        ...prev,
+        deviceConstants: newDeviceConstants,
+        device_constants: convertDeviceConstantsToApiFormat(newDeviceConstants)
+      };
+    });
     logTerminal(`Deleted device constant ${id}`);
   };
 
@@ -278,13 +339,31 @@ This automation project involves setting up a vision inspection system using KEY
       newName = parts[0] || nameTrim;
     }
 
-    setProjectContext(prev => ({
-      ...prev,
-      deviceConstants: prev.deviceConstants.map(dc => dc.id === id ? { ...dc, path: newPath, name: newName, value: valueTrim, source: 'manual' } : dc)
-    }));
+    setProjectContext(prev => {
+      const newDeviceConstants = prev.deviceConstants.map(dc => 
+        dc.id === id ? { ...dc, path: newPath, name: newName, value: valueTrim, source: 'manual' } : dc
+      );
+      return {
+        ...prev,
+        deviceConstants: newDeviceConstants,
+        device_constants: convertDeviceConstantsToApiFormat(newDeviceConstants)
+      };
+    });
 
     logTerminal(`Edited device constant ${id} -> ${[...newPath, newName].join('.')} = ${valueTrim}`);
     cancelEditConstant();
+  };
+
+  // Helper function to convert UI stage to API stage
+  const convertStageToApiFormat = (stage: typeof currentStage): string => {
+    const stageMapping: Record<typeof currentStage, string> = {
+      'project_kickoff': 'gathering_requirements',
+      'gather_requirements': 'gathering_requirements',
+      'code_generation': 'code_generation',
+      'refinement_testing': 'refinement_testing',
+      'completed': 'refinement_testing'
+    };
+    return stageMapping[stage] || 'gathering_requirements';
   };
 
   const logTerminal = (line: string) => {
@@ -455,30 +534,65 @@ This automation project involves setting up a vision inspection system using KEY
     try {
     // Log outgoing LLM request (concise)
     logApiSummary('SEND', userMessage.content);
-      // Call the real API - works for both initial and follow-up messages
-      const response: ChatResponse = await apiClient.chat({
-        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. User request: ${userMessage.content}`,
-        model: "gpt-4o-mini",
-        temperature: 0.7,
-        max_completion_tokens: 1024
-      });
+      // Call the new context API - works for both initial and follow-up messages
+      const response: ContextResponse = await apiClient.updateContext(
+        projectContext,
+        convertStageToApiFormat(currentStage),
+        userMessage.content,
+        undefined, // mcqResponses
+        uploadedFiles.length > 0 ? uploadedFiles.map(f => {
+          // Convert UploadedFile to File object for API
+          const blob = new Blob([f.content || ''], { type: f.type });
+          const file = new File([blob], f.name, { type: f.type });
+          return file;
+        }) : undefined
+      );
 
   // Log brief response summary
-  logApiSummary('RECV', response.content);
+  logApiSummary('RECV', response.chat_message);
+      
+      // Update project context from API response
+      setProjectContext(prev => ({
+        ...response.updated_context,
+        deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+      }));
+      
+      // Update stage if changed
+      if (response.current_stage !== currentStage) {
+        // Map API stage names to UI stage names
+        const stageMapping: Record<string, typeof currentStage> = {
+          'gathering_requirements': 'gather_requirements',
+          'code_generation': 'code_generation',
+          'refinement_testing': 'refinement_testing'
+        };
+        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+        handleStageTransition(mappedStage, 'Backend updated stage');
+      }
+      
+      // Update progress if provided
+      if (response.gathering_requirements_progress !== undefined) {
+        setStageProgress({ confidence: response.gathering_requirements_progress });
+      }
+      
+      // Update generated code if provided
+      if (response.generated_code) {
+        setGeneratedCode(response.generated_code);
+        logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
+      }
       
       // Check if response contains MCQ and extract options
-      const mcqOptions = parseMCQ(response.content);
+      const mcqOptions = response.is_mcq ? response.mcq_options : null;
       if (mcqOptions && mcqOptions.length > 0) {
         logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
       }
       
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: response.content,
+        content: response.chat_message,
         role: "assistant",
         timestamp: new Date(),
         mcqOptions: mcqOptions || undefined,
-        isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined // Assume multi-select if >2 options
+        isMultiSelect: response.is_multiselect
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
@@ -558,35 +672,62 @@ This automation project involves setting up a vision inspection system using KEY
       logTerminal(`MCQ-only submission: ${allSelectedOptions.length} options selected, continuing conversation flow`);
 
       try {
-        // Construct prompt with MCQ selections as context (strip markdown before sending)
+        // Construct MCQ selections for API
         const stripped = allSelectedOptions.map(o => stripMarkdown(o));
-        const mcqBlock = `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`; // explicit delimiter for backend parsing
-        const mcqContext = `User selected the following options: ${stripped.join(', ')}`;
 
-        logApiSummary('SEND', `${mcqBlock} ${mcqContext}`);
+        logApiSummary('SEND', `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`);
 
-        const response: ChatResponse = await apiClient.chat({
-          user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext}. ${mcqBlock}. Continue the conversation based on these selections.`,
-          model: "gpt-4o-mini",
-          temperature: 0.7,
-          max_completion_tokens: 1024
-        });
+        const response: ContextResponse = await apiClient.updateContext(
+          projectContext,
+          convertStageToApiFormat(currentStage),
+          undefined, // no message
+          stripped, // mcqResponses
+          undefined // no files
+        );
 
-        logApiSummary('RECV', response.content);
+        logApiSummary('RECV', response.chat_message);
+        
+        // Update project context from API response
+        setProjectContext(prev => ({
+          ...response.updated_context,
+          deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+        }));
+        
+        // Update stage if changed
+        if (response.current_stage !== currentStage) {
+          const stageMapping: Record<string, typeof currentStage> = {
+            'gathering_requirements': 'gather_requirements',
+            'code_generation': 'code_generation',
+            'refinement_testing': 'refinement_testing'
+          };
+          const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+          handleStageTransition(mappedStage, 'Backend updated stage');
+        }
+        
+        // Update progress if provided
+        if (response.gathering_requirements_progress !== undefined) {
+          setStageProgress({ confidence: response.gathering_requirements_progress });
+        }
+        
+        // Update generated code if provided
+        if (response.generated_code) {
+          setGeneratedCode(response.generated_code);
+          logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
+        }
         
         // Check if response contains MCQ and extract options
-        const mcqOptions = parseMCQ(response.content);
+        const mcqOptions = response.is_mcq ? response.mcq_options : null;
         if (mcqOptions && mcqOptions.length > 0) {
           logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
         }
         
         const assistantMessage: Message = {
           id: Date.now().toString(),
-          content: response.content,
+          content: response.chat_message,
           role: "assistant",
           timestamp: new Date(),
           mcqOptions: mcqOptions || undefined,
-          isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined
+          isMultiSelect: response.is_multiselect
         };
         setMessages(prev => [...prev, assistantMessage]);
         
@@ -640,36 +781,69 @@ This automation project involves setting up a vision inspection system using KEY
     setLastError(null);
 
     try {
-      // Prepare MCQ context text (sent to backend only)
+      // Prepare MCQ context if selections exist
       const stripped = allSelectedOptions.length > 0 ? allSelectedOptions.map(o => stripMarkdown(o)) : [];
-      const mcqBlock = stripped.length > 0 ? `MCQ_SELECTIONS: ${stripped.join(' ||| ')}` : '';
-      const mcqContext = stripped.length > 0 ? `User selected the following options: ${stripped.join(', ')}` : '';
 
       // Log outgoing LLM request for submitted input (compact)
-      logApiSummary('SEND', `${mcqBlock} ${visibleContent}`);
+      logApiSummary('SEND', `${stripped.length > 0 ? `MCQ: ${stripped.join(', ')} + ` : ''}${visibleContent}`);
 
-      // Call the real API - include MCQ selections in the user_prompt but don't display them in the UI
-      const response: ChatResponse = await apiClient.chat({
-        user_prompt: `Context: You are PLC Copilot, an expert assistant for industrial automation and PLC programming. ${mcqContext} ${mcqBlock} User request: ${visibleContent}`,
-        model: "gpt-4o-mini",
-        temperature: 0.7,
-        max_completion_tokens: 1024
-      });
-      logApiSummary('RECV', response.content);
+      // Call the new context API - include MCQ selections
+      const response: ContextResponse = await apiClient.updateContext(
+        projectContext,
+        convertStageToApiFormat(currentStage),
+        visibleContent,
+        stripped.length > 0 ? stripped : undefined, // mcqResponses
+        uploadedFiles.length > 0 ? uploadedFiles.map(f => {
+          // Convert UploadedFile to File object for API
+          const blob = new Blob([f.content || ''], { type: f.type });
+          const file = new File([blob], f.name, { type: f.type });
+          return file;
+        }) : undefined
+      );
+      
+      logApiSummary('RECV', response.chat_message);
+
+      // Update project context from API response
+      setProjectContext(prev => ({
+        ...response.updated_context,
+        deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+      }));
+      
+      // Update stage if changed
+      if (response.current_stage !== currentStage) {
+        const stageMapping: Record<string, typeof currentStage> = {
+          'gathering_requirements': 'gather_requirements',
+          'code_generation': 'code_generation',
+          'refinement_testing': 'refinement_testing'
+        };
+        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+        handleStageTransition(mappedStage, 'Backend updated stage');
+      }
+      
+      // Update progress if provided
+      if (response.gathering_requirements_progress !== undefined) {
+        setStageProgress({ confidence: response.gathering_requirements_progress });
+      }
+      
+      // Update generated code if provided
+      if (response.generated_code) {
+        setGeneratedCode(response.generated_code);
+        logTerminal(`Generated code updated: ${response.generated_code.length} characters`);
+      }
 
       // Check if response contains MCQ and extract options
-      const mcqOptions = parseMCQ(response.content);
+      const mcqOptions = response.is_mcq ? response.mcq_options : null;
       if (mcqOptions && mcqOptions.length > 0) {
         logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
       }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: response.content,
+        content: response.chat_message,
         role: "assistant",
         timestamp: new Date(),
         mcqOptions: mcqOptions || undefined,
-        isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined
+        isMultiSelect: response.is_multiselect
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
@@ -862,9 +1036,11 @@ This automation project involves setting up a vision inspection system using KEY
             <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1 overflow-hidden">
               <div className="flex-1 overflow-y-auto p-6 min-h-0">
                 <pre className="text-gray-200 whitespace-pre-wrap break-words">
-{`// Conveyor Belt Control System
-// Generated by PLC Copilot
+                  {generatedCode || `// No code generated yet
+// PLC Copilot will generate Structured Text code here
+// based on your requirements and device context.
 
+// Example placeholder:
 PROGRAM ConveyorControl
 VAR
     bStart          : BOOL := FALSE;      // Start button
@@ -872,7 +1048,6 @@ VAR
     bEmergencyStop  : BOOL := FALSE;      // E-stop
     bMotorRunning   : BOOL := FALSE;      // Motor status
     bSafetyOK       : BOOL := TRUE;       // Safety check
-    tMotorTimer     : TON;                // Motor timer
     
     // Inputs
     bStartButton    : BOOL;
@@ -1130,7 +1305,11 @@ END_PROGRAM`}
                     onChange={(e) => {
                       const val = e.target.value;
                       setInformationInput(val);
-                      setProjectContext(prev => ({ ...prev, information: val }));
+                      setProjectContext(prev => ({ 
+                        ...prev, 
+                        information: val,
+                        device_constants: prev.device_constants // Keep device_constants in sync
+                      }));
                     }}
                     onFocus={() => setInformationPlaceholder("")}
                     onBlur={() => { if (!informationInput) setInformationPlaceholder("Notes..."); }}
