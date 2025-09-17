@@ -26,6 +26,8 @@ interface Message {
   timestamp: Date;
   hasFiles?: boolean;
   attachedFiles?: { name: string; type: string }[]; // Store file info with message
+  mcqOptions?: string[]; // MCQ options for assistant messages
+  isMultiSelect?: boolean; // Whether MCQ allows multiple selections
 }
 
 interface UploadedFile {
@@ -57,6 +59,7 @@ export default function PLCCopilotProject() {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [selectedMcqOptions, setSelectedMcqOptions] = useState<{[messageId: string]: string[]}>({});
   const [activeView, setActiveView] = useState<OutputView>(() => {
     // Default to chat on mobile, structured-text on desktop
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
@@ -227,19 +230,22 @@ export default function PLCCopilotProject() {
 
       // Log brief response summary
       logTerminal(`RECV LLM <- length=${response.content.length}`);
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: response.content,
-        role: "assistant",
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, assistantMessage]);
       
-      // Check if response contains MCQ and log options
+      // Check if response contains MCQ and extract options
       const mcqOptions = parseMCQ(response.content);
       if (mcqOptions && mcqOptions.length > 0) {
         logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
       }
+      
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: response.content,
+        role: "assistant",
+        timestamp: new Date(),
+        mcqOptions: mcqOptions || undefined,
+        isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined // Assume multi-select if >2 options
+      };
+      setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('API call failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -262,11 +268,40 @@ export default function PLCCopilotProject() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    
+    // Collect all currently selected MCQ options
+    const allSelectedOptions: string[] = [];
+    const mcqSelectionMessages: string[] = [];
+    
+    Object.keys(selectedMcqOptions).forEach(messageId => {
+      const selections = selectedMcqOptions[messageId];
+      if (selections && selections.length > 0) {
+        allSelectedOptions.push(...selections);
+        mcqSelectionMessages.push(`Selected options: ${selections.join(', ')}`);
+      }
+    });
+    
+    // Require either text input or MCQ selections
+    if (!input.trim() && allSelectedOptions.length === 0) {
+      return;
+    }
+    
+    if (isLoading) return;
+
+    // Construct message content with MCQ selections and text
+    let messageContent = '';
+    if (mcqSelectionMessages.length > 0) {
+      messageContent = mcqSelectionMessages.join('\n');
+      if (input.trim()) {
+        messageContent += '\n\nAdditional message: ' + input.trim();
+      }
+    } else {
+      messageContent = input.trim();
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: input.trim(),
+      content: messageContent,
       role: "user",
       timestamp: new Date(),
       hasFiles: uploadedFiles.length > 0, // Track if this message had files
@@ -277,6 +312,13 @@ export default function PLCCopilotProject() {
     setInput("");
     setUploadedFiles([]); // Clear uploaded files immediately when message is sent
     localStorage.removeItem('plc_copilot_uploaded_files'); // Clear from localStorage too
+    
+    // Clear MCQ selections after submission
+    if (allSelectedOptions.length > 0) {
+      setSelectedMcqOptions({});
+      logTerminal(`MCQ submission: ${allSelectedOptions.length} options submitted with message`);
+    }
+    
     setIsLoading(true);
     setApiCallInProgress(true);
     setLastError(null);
@@ -294,19 +336,21 @@ export default function PLCCopilotProject() {
 
       logTerminal(`RECV LLM <- length=${response.content.length}`);
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: response.content,
-        role: "assistant",
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      // Check if response contains MCQ and log options
+      // Check if response contains MCQ and extract options
       const mcqOptions = parseMCQ(response.content);
       if (mcqOptions && mcqOptions.length > 0) {
         logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
       }
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: response.content,
+        role: "assistant",
+        timestamp: new Date(),
+        mcqOptions: mcqOptions || undefined,
+        isMultiSelect: mcqOptions ? mcqOptions.length > 2 : undefined
+      };
+      setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('API call failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -667,19 +711,80 @@ END_PROGRAM`}
                   )}
 
                   <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[85%] rounded-lg px-4 py-3 ${
-                        message.role === "user"
-                          ? "bg-orange-500 text-white"
-                          : "bg-gray-800 text-gray-100"
-                      }`}
-                    >
-                      <p className="whitespace-pre-wrap">{message.content}</p>
-                      <time className="text-xs opacity-70 mt-1 block">
-                        {message.timestamp.toLocaleTimeString()}
-                      </time>
-                    </div>
+                    {message.role === "user" ? (
+                      <div className="max-w-[85%] rounded-lg px-4 py-3 bg-orange-500 text-white">
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        <time className="text-xs opacity-70 mt-1 block">
+                          {message.timestamp.toLocaleTimeString()}
+                        </time>
+                      </div>
+                    ) : (
+                      <div className="max-w-[85%] text-gray-100">
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        <time className="text-xs opacity-50 mt-1 block text-gray-400">
+                          {message.timestamp.toLocaleTimeString()}
+                        </time>
+                      </div>
+                    )}
                   </div>
+
+                  {/* MCQ Options for assistant messages */}
+                  {message.role === "assistant" && message.mcqOptions && message.mcqOptions.length > 0 && (
+                    <div className="flex justify-start mt-3">
+                      <div className="max-w-[85%] space-y-2">
+                        <p className="text-sm text-gray-400 mb-2">
+                          {message.isMultiSelect ? "Select one or more options:" : "Select an option:"}
+                        </p>
+                        <div className="grid gap-2">
+                          {message.mcqOptions.map((option, optionIndex) => {
+                            const isSelected = selectedMcqOptions[message.id]?.includes(option) || false;
+                            return (
+                              <button
+                                key={optionIndex}
+                                onClick={() => {
+                                  const currentSelections = selectedMcqOptions[message.id] || [];
+                                  let newSelections: string[];
+                                  
+                                  if (message.isMultiSelect) {
+                                    // Multi-select: toggle option
+                                    if (isSelected) {
+                                      newSelections = currentSelections.filter(s => s !== option);
+                                    } else {
+                                      newSelections = [...currentSelections, option];
+                                    }
+                                  } else {
+                                    // Single-select: replace selection
+                                    newSelections = isSelected ? [] : [option];
+                                  }
+                                  
+                                  setSelectedMcqOptions(prev => ({
+                                    ...prev,
+                                    [message.id]: newSelections
+                                  }));
+                                  
+                                  logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
+                                }}
+                                className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                                  isSelected
+                                    ? "bg-orange-500 border-orange-500 text-white"
+                                    : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-3 h-3 rounded border ${
+                                    message.isMultiSelect ? "rounded-sm" : "rounded-full"
+                                  } ${
+                                    isSelected ? "bg-white" : "border-gray-400"
+                                  }`} />
+                                  <span className="text-sm">{option}</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 );
               })}
@@ -754,7 +859,7 @@ END_PROGRAM`}
                 {/* Send button - exact same positioning as index page */}
                 <button
                   type="submit"
-                  disabled={!input.trim() || isLoading}
+                  disabled={(!input.trim() && Object.values(selectedMcqOptions).every(options => !options || options.length === 0)) || isLoading}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Send className="w-4 h-4" />
@@ -850,19 +955,80 @@ END_PROGRAM`}
                         )}
 
                         <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                          <div
-                            className={`max-w-[85%] rounded-lg px-4 py-3 ${
-                              message.role === "user"
-                                ? "bg-orange-500 text-white"
-                                : "bg-gray-800 text-gray-100"
-                            }`}
-                          >
-                            <p className="whitespace-pre-wrap">{message.content}</p>
-                            <time className="text-xs opacity-70 mt-1 block">
-                              {message.timestamp.toLocaleTimeString()}
-                            </time>
-                          </div>
+                          {message.role === "user" ? (
+                            <div className="max-w-[85%] rounded-lg px-4 py-3 bg-orange-500 text-white">
+                              <p className="whitespace-pre-wrap">{message.content}</p>
+                              <time className="text-xs opacity-70 mt-1 block">
+                                {message.timestamp.toLocaleTimeString()}
+                              </time>
+                            </div>
+                          ) : (
+                            <div className="max-w-[85%] text-gray-100">
+                              <p className="whitespace-pre-wrap">{message.content}</p>
+                              <time className="text-xs opacity-50 mt-1 block text-gray-400">
+                                {message.timestamp.toLocaleTimeString()}
+                              </time>
+                            </div>
+                          )}
                         </div>
+
+                        {/* MCQ Options for assistant messages */}
+                        {message.role === "assistant" && message.mcqOptions && message.mcqOptions.length > 0 && (
+                          <div className="flex justify-start mt-3">
+                            <div className="max-w-[85%] space-y-2">
+                              <p className="text-sm text-gray-400 mb-2">
+                                {message.isMultiSelect ? "Select one or more options:" : "Select an option:"}
+                              </p>
+                              <div className="grid gap-2">
+                                {message.mcqOptions.map((option, optionIndex) => {
+                                  const isSelected = selectedMcqOptions[message.id]?.includes(option) || false;
+                                  return (
+                                    <button
+                                      key={optionIndex}
+                                      onClick={() => {
+                                        const currentSelections = selectedMcqOptions[message.id] || [];
+                                        let newSelections: string[];
+                                        
+                                        if (message.isMultiSelect) {
+                                          // Multi-select: toggle option
+                                          if (isSelected) {
+                                            newSelections = currentSelections.filter(s => s !== option);
+                                          } else {
+                                            newSelections = [...currentSelections, option];
+                                          }
+                                        } else {
+                                          // Single-select: replace selection
+                                          newSelections = isSelected ? [] : [option];
+                                        }
+                                        
+                                        setSelectedMcqOptions(prev => ({
+                                          ...prev,
+                                          [message.id]: newSelections
+                                        }));
+                                        
+                                        logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
+                                      }}
+                                      className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                                        isSelected
+                                          ? "bg-orange-500 border-orange-500 text-white"
+                                          : "bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <div className={`w-3 h-3 rounded border ${
+                                          message.isMultiSelect ? "rounded-sm" : "rounded-full"
+                                        } ${
+                                          isSelected ? "bg-white" : "border-gray-400"
+                                        }`} />
+                                        <span className="text-sm">{option}</span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       );
                     })}
