@@ -25,6 +25,61 @@ import { ConnectionStatus, ErrorMessage } from "~/components/ConnectionStatus";
 import { StageIndicator } from "~/components/StageIndicator";
 import { Button } from "~/components/ui/button";
 
+// Safe ReactMarkdown wrapper with fallback for Safari compatibility
+const SafeReactMarkdown = ({ children, components, ...props }: any) => {
+  try {
+    // First try with remark-gfm
+    return (
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={components}
+        {...props}
+      >
+        {children}
+      </ReactMarkdown>
+    );
+  } catch (error) {
+    console.warn('ReactMarkdown with remark-gfm failed, trying without plugins:', error);
+    
+    try {
+      // Try without remark-gfm for Safari compatibility
+      return (
+        <ReactMarkdown 
+          components={components}
+          {...props}
+        >
+          {children}
+        </ReactMarkdown>
+      );
+    } catch (fallbackError) {
+      // Final fallback for Safari/iOS compatibility issues
+      console.warn('ReactMarkdown completely failed, falling back to formatted text:', fallbackError);
+      
+      // Try to provide a better fallback by rendering basic formatting
+      const processText = (text: string) => {
+        return text
+          // Convert **bold** to <strong>
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          // Convert single *italic* (avoiding double ** which was already processed)
+          .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+          // Convert `code` to <code>
+          .replace(/`(.*?)`/g, '<code style="background: #374151; padding: 0.125rem 0.25rem; border-radius: 0.25rem;">$1</code>')
+          // Convert line breaks
+          .replace(/\n/g, '<br />');
+      };
+      
+      return (
+        <div 
+          className="whitespace-pre-wrap text-gray-300"
+          dangerouslySetInnerHTML={{ 
+            __html: processText(children || '') 
+          }}
+        />
+      );
+    }
+  }
+};
+
 interface Message {
   id: string;
   content: string;
@@ -1434,8 +1489,7 @@ END_PROGRAM`}
                       {informationInput.trim() === '' || informationInput === informationPlaceholder ? (
                         <div className="text-gray-500 text-sm italic">{informationPlaceholder}</div>
                       ) : (
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
+                        <SafeReactMarkdown
                           components={{
                             // Headers
                             h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-3 mt-4 first:mt-0" {...props} />,
@@ -1488,7 +1542,7 @@ END_PROGRAM`}
                           }}
                         >
                           {informationInput}
-                        </ReactMarkdown>
+                        </SafeReactMarkdown>
                       )}
                     </div>
                   )}
@@ -1614,8 +1668,8 @@ END_PROGRAM`}
                       </div>
                     ) : (
                       <div className="max-w-[85%] text-gray-100">
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
+                        <SafeReactMarkdown
+                          
                           components={{
                             // Headers
                             h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
@@ -1669,7 +1723,7 @@ END_PROGRAM`}
                           }}
                         >
                           {message.content}
-                        </ReactMarkdown>
+                        </SafeReactMarkdown>
                         <time className="text-xs opacity-50 mt-1 block text-gray-400">
                           {message.timestamp.toLocaleTimeString()}
                         </time>
@@ -1738,8 +1792,8 @@ END_PROGRAM`}
                                     }`} />
                                   )}
                                   <div className="text-sm leading-relaxed flex-1">
-                                    <ReactMarkdown 
-                                      remarkPlugins={[remarkGfm]}
+                                    <SafeReactMarkdown
+                                      
                                       components={{
                                         // Inline-optimized components for MCQ buttons
                                         p: ({node, ...props}) => <span className="text-current" {...props} />,
@@ -1762,7 +1816,7 @@ END_PROGRAM`}
                                       }}
                                     >
                                       {option}
-                                    </ReactMarkdown>
+                                    </SafeReactMarkdown>
                                   </div>
                                 </div>
                               </button>
@@ -2015,8 +2069,8 @@ END_PROGRAM`}
                             </div>
                           ) : (
                             <div className="max-w-[85%] text-gray-100">
-                              <ReactMarkdown 
-                                remarkPlugins={[remarkGfm]}
+                              <SafeReactMarkdown
+                                
                                 components={{
                                   // Headers
                                   h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
@@ -2070,7 +2124,7 @@ END_PROGRAM`}
                                 }}
                               >
                                 {message.content}
-                              </ReactMarkdown>
+                              </SafeReactMarkdown>
                               <time className="text-xs opacity-50 mt-1 block text-gray-400">
                                 {message.timestamp.toLocaleTimeString()}
                               </time>
@@ -2139,8 +2193,8 @@ END_PROGRAM`}
                                           }`} />
                                         )}
                                         <div className="text-sm leading-relaxed flex-1">
-                                          <ReactMarkdown 
-                                            remarkPlugins={[remarkGfm]}
+                                          <SafeReactMarkdown
+                                            
                                             components={{
                                               // Inline-optimized components for MCQ buttons
                                               p: ({node, ...props}) => <span className="text-current" {...props} />,
@@ -2163,7 +2217,7 @@ END_PROGRAM`}
                                             }}
                                           >
                                             {option}
-                                          </ReactMarkdown>
+                                          </SafeReactMarkdown>
                                         </div>
                                       </div>
                                     </button>
