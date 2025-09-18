@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, createElement } from "react";
 import { useParams, Link, useSearchParams } from "@remix-run/react";
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
   Send, 
@@ -17,7 +18,8 @@ import {
   X,
   Paperclip,
   ArrowLeft,
-  SkipForward
+  SkipForward,
+  Download
 } from "lucide-react";
 import { Edit } from "lucide-react";
 import { apiClient, type ContextResponse, type ProjectContext as ApiProjectContext } from "~/lib/api-client";
@@ -28,6 +30,8 @@ import { Button } from "~/components/ui/button";
 // Safe ReactMarkdown wrapper with fallback for Safari compatibility
 const SafeReactMarkdown = ({ children, components, ...props }: any) => {
   try {
+    // DEBUG: Log entry into SafeReactMarkdown (module scope)
+    console.debug('DEBUG: Entered SafeReactMarkdown');
     // First try with remark-gfm
     return (
       <ReactMarkdown 
@@ -39,7 +43,7 @@ const SafeReactMarkdown = ({ children, components, ...props }: any) => {
       </ReactMarkdown>
     );
   } catch (error) {
-    console.warn('ReactMarkdown with remark-gfm failed, trying without plugins:', error);
+    console.error('DEBUG: ReactMarkdown error:', error);
     
     try {
       // Try without remark-gfm for Safari compatibility
@@ -109,7 +113,10 @@ const convertDeviceConstantsToApiFormat = (deviceConstants: DeviceConstant[]): R
     // Navigate to the right location in the nested object
     for (let i = 0; i < fullPath.length - 1; i++) {
       const key = fullPath[i];
-      if (!current[key]) current[key] = {};
+      // Only create object if key doesn't exist or if it's not already a string value
+      if (!current[key] || typeof current[key] === 'string') {
+        current[key] = {};
+      }
       current = current[key];
     }
     
@@ -276,7 +283,7 @@ export default function PLCCopilotProject() {
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [contextLoaded, setContextLoaded] = useState(false); // Track if context has been loaded from localStorage
-  const [isEditingInformation, setIsEditingInformation] = useState(false); // Toggle between edit and preview mode for information field
+  const [isInformationFocused, setIsInformationFocused] = useState(false); // Track if information textarea is focused
   
   // Context state
   const [projectContext, setProjectContext] = useState<ProjectContext>(() => {
@@ -411,6 +418,29 @@ export default function PLCCopilotProject() {
     setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
   };
 
+  // Safe stringify to avoid exceptions when serializing circular objects
+  const safeStringify = (obj: any, maxLength: number = 1200) => {
+    try {
+      const seen = new WeakSet();
+      const str = JSON.stringify(obj, function(key, value) {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) return '[Circular]';
+          seen.add(value);
+        }
+        return value;
+      });
+      return str.length > maxLength ? str.slice(0, maxLength) + '... [truncated]' : str;
+    } catch (e) {
+      try {
+        // Fallback: attempt to coerce to string
+        const coerced = String(obj);
+        return coerced.length > maxLength ? coerced.slice(0, maxLength) + '... [truncated]' : coerced;
+      } catch (e2) {
+        return '[unserializable response]';
+      }
+    }
+  };
+
   // Return a very concise description of how the current stage modifies the prompt
   const buildPromptModifier = (stage: typeof currentStage) => {
     switch (stage) {
@@ -464,18 +494,54 @@ export default function PLCCopilotProject() {
     if (optionLines.length >= 2) return optionLines;
     return null;
   };
+
+  // Verify session ID in API responses
+  const verifySessionId = (response: ContextResponse) => {
+    if (response.session_id && response.session_id !== sessionId) {
+      console.warn('Session ID mismatch detected', {
+        expected: sessionId,
+        received: response.session_id
+      });
+      // Could show a warning to the user or handle the mismatch
+      logTerminal(`WARNING: Session ID mismatch - expected: ${sessionId}, received: ${response.session_id}`);
+    }
+  };
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
   const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
   
   // ...existing code...
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const codeEndRef = useRef<HTMLDivElement>(null);
   const apiCallInProgressRef = useRef(false);
   const resizingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const scrollCodeToBottom = () => {
+    const sentinel = codeEndRef.current;
+    if (!sentinel) return;
+
+    // Prefer scrollIntoView, but fallback to directly setting scrollTop on the scroll container
+    try {
+      sentinel.scrollIntoView({ behavior: 'smooth' });
+      return;
+    } catch (err) {
+      // ignore and try fallback
+    }
+
+    const scroller = sentinel.parentElement;
+    if (scroller) {
+      try {
+        scroller.scrollTop = scroller.scrollHeight;
+      } catch (e) {
+        // last resort
+        sentinel.scrollIntoView();
+      }
+    }
   };
 
   // Load uploaded files from localStorage on component mount
@@ -522,6 +588,26 @@ export default function PLCCopilotProject() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Auto-scroll code view when generatedCode updates or when ST tab becomes active
+  useEffect(() => {
+    if (activeView !== 'structured-text') return;
+
+    // TEMPORARILY DISABLED - This scroll function interferes with sticky header positioning
+    // TODO: Fix scroll to not affect sticky header
+    // const id = window.setTimeout(() => {
+    //   try {
+    //     // Use requestAnimationFrame to wait for layout
+    //     window.requestAnimationFrame(() => {
+    //       scrollCodeToBottom();
+    //     });
+    //   } catch (e) {
+    //     scrollCodeToBottom();
+    //   }
+    // }, 50);
+
+    // return () => window.clearTimeout(id);
+  }, [generatedCode, activeView]);
 
   // Append lastError into terminal logs for quick visibility
   useEffect(() => {
@@ -591,11 +677,15 @@ export default function PLCCopilotProject() {
           const file = new File([blob], f.name, { type: f.type });
           return file;
         }) : undefined,
-        getPreviousCopilotMessage() // previous copilot message for context
+        getPreviousCopilotMessage(), // previous copilot message for context
+        sessionId // Pass session ID from URL params
       );
 
-  // Log brief response summary
-  logApiSummary('RECV', response.chat_message, response.updated_context);
+      // Log brief response summary
+      logApiSummary('RECV', response.chat_message, response.updated_context);
+
+      // Verify session ID
+      verifySessionId(response);
 
       // Update context from backend response
       updateContextFromResponse(response);
@@ -620,8 +710,11 @@ export default function PLCCopilotProject() {
       }
       
       // Update progress if provided
-      if (response.gathering_requirements_progress !== undefined) {
-        setStageProgress({ confidence: response.gathering_requirements_progress });
+      if (response.gathering_requirements_estimated_progress !== undefined) {
+        logTerminal(`gathering_requirements_estimated_progress: ${response.gathering_requirements_estimated_progress}`);
+        setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
+      } else {
+        logTerminal('WARNING: Backend response missing gathering_requirements_estimated_progress');
       }
       
       // Check if response contains MCQ and extract options
@@ -751,7 +844,12 @@ export default function PLCCopilotProject() {
       ? ` | PREV: ${previousCopilotMessage.replace(/\s+/g, ' ').trim().slice(0, 40)}${previousCopilotMessage.length > 40 ? '…' : ''}`
       : '';
     
-    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}${contextSummary}${prevMsgSummary}`);
+    // For RECV operations, show gathering_requirements_estimated_progress if available
+    const progressInfo = direction === 'RECV' && context?.gathering_requirements_estimated_progress !== undefined
+      ? ` | PROGRESS: ${context.gathering_requirements_estimated_progress}`
+      : '';
+    
+    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}${contextSummary}${prevMsgSummary}${progressInfo}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -815,10 +913,14 @@ export default function PLCCopilotProject() {
           undefined, // no message
           stripped, // mcqResponses
           undefined, // no files
-          getPreviousCopilotMessage() // previous copilot message for context
+          getPreviousCopilotMessage(), // previous copilot message for context
+          sessionId // Pass session ID from URL params
         );
 
         logApiSummary('RECV', response.chat_message, response.updated_context);
+
+        // Verify session ID
+        verifySessionId(response);
 
         // Update context from backend response
         updateContextFromResponse(response);
@@ -843,8 +945,8 @@ export default function PLCCopilotProject() {
         }
         
         // Update progress if provided
-        if (response.gathering_requirements_progress !== undefined) {
-          setStageProgress({ confidence: response.gathering_requirements_progress });
+        if (response.gathering_requirements_estimated_progress !== undefined) {
+          setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
         }
         
         // Check if response contains MCQ and extract options
@@ -932,10 +1034,14 @@ export default function PLCCopilotProject() {
           const file = new File([blob], f.name, { type: f.type });
           return file;
         }) : undefined,
-        getPreviousCopilotMessage() // previous copilot message for context
+        getPreviousCopilotMessage(), // previous copilot message for context
+        sessionId // Pass session ID from URL params
       );
       
       logApiSummary('RECV', response.chat_message, response.updated_context);
+
+      // Verify session ID
+      verifySessionId(response);
 
       // Update context from backend response
       updateContextFromResponse(response);
@@ -960,8 +1066,8 @@ export default function PLCCopilotProject() {
       }
       
       // Update progress if provided
-      if (response.gathering_requirements_progress !== undefined) {
-        setStageProgress({ confidence: response.gathering_requirements_progress });
+      if (response.gathering_requirements_estimated_progress !== undefined) {
+        setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
       }
       
       // Update generated code if provided
@@ -1181,23 +1287,142 @@ export default function PLCCopilotProject() {
     }
   }, [projectContext, sessionId, contextLoaded]);
 
-  // Cleanup resize event listeners on unmount
+  // Cleanup session and event listeners on unmount
   useEffect(() => {
     return () => {
+      // Cleanup session when component unmounts
+      if (sessionId) {
+        apiClient.cleanupSession([sessionId]).catch(error => {
+          console.warn('Failed to cleanup session on unmount:', error);
+        });
+      }
+      
+      // Cleanup event listeners
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []);
+  }, [sessionId]);
+
+  // Explicit session cleanup function
+  const handleEndSession = async () => {
+    if (!sessionId) return;
+    
+    try {
+      logTerminal(`Cleaning up session: ${sessionId}`);
+      const result = await apiClient.cleanupSession([sessionId]);
+      logTerminal(`Session cleanup successful: ${result.message}`);
+      
+      // Clear local storage for this session
+      localStorage.removeItem(`plc_copilot_context_${sessionId}`);
+      localStorage.removeItem('plc_copilot_uploaded_files');
+      
+      // Optionally redirect to sessions list or show success message
+      // navigate('/projects/plc-copilot/session');
+    } catch (error) {
+      console.error('Failed to cleanup session:', error);
+      logTerminal(`Session cleanup failed: ${error}`);
+    }
+  };
+
+  // Download generated code function
+  const downloadGeneratedCode = () => {
+    // Get the current content from the textarea (either generatedCode or placeholder)
+    const content = generatedCode || `// No code generated yet
+// PLC Copilot will generate Structured Text code here
+// based on your requirements and device context.
+
+// Example placeholder:
+PROGRAM ConveyorControl
+VAR
+    bStart          : BOOL := FALSE;      // Start button
+    bStop           : BOOL := FALSE;      // Stop button  
+    bEmergencyStop  : BOOL := FALSE;      // E-stop
+    bMotorRunning   : BOOL := FALSE;      // Motor status
+    bSafetyOK       : BOOL := TRUE;       // Safety check
+    
+    // Inputs
+    bStartButton    : BOOL;
+    bStopButton     : BOOL;
+    bEStop          : BOOL;
+    bSafetyGate     : BOOL;
+    
+    // Outputs
+    qMotorContactor : BOOL;
+    qStatusLight    : BOOL;
+END_VAR
+
+// Main control logic
+IF bEStop OR NOT bSafetyGate THEN
+    bSafetyOK := FALSE;
+    qMotorContactor := FALSE;
+    bMotorRunning := FALSE;
+ELSE
+    bSafetyOK := TRUE;
+END_IF;
+
+// Start/Stop logic
+IF bStartButton AND bSafetyOK AND NOT bMotorRunning THEN
+    bStart := TRUE;
+ELSIF bStopButton OR NOT bSafetyOK THEN
+    bStart := FALSE;
+END_IF;
+
+// Motor control
+IF bStart AND bSafetyOK THEN
+    qMotorContactor := TRUE;
+    bMotorRunning := TRUE;
+ELSE
+    qMotorContactor := FALSE;
+    bMotorRunning := FALSE;
+END_IF;
+
+// Status indication
+qStatusLight := bMotorRunning;
+
+END_PROGRAM`;
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plc_program.st'; // .st is the common extension for Structured Text
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const renderOutputContent = () => {
     switch (activeView) {
       case "structured-text":
         return (
+          // ST_TAB_CONTENT_CONTAINER - Main container with full padding
           <div className="h-full p-6 flex flex-col min-h-0">
-            <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1 overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-6 min-h-0">
-                <pre className="text-gray-200 whitespace-pre-wrap break-words">
-                  {generatedCode || `// No code generated yet
+            
+            {/* ST_TAB_HEADER - Header with title, description, and download button */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <FileText className="w-5 h-5 text-orange-500" />
+                <h2 className="text-sm font-semibold">Structured Text</h2>
+                <p className="text-xs text-gray-400">IEC 61131-3 programming language</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={downloadGeneratedCode}
+                  className="p-2 text-gray-300 hover:text-white border border-gray-800 rounded bg-gray-900 hover:bg-gray-800 transition-colors"
+                  title="Download PLC program as .st file"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* ST_EDITOR_CONTAINER - Contains the actual code editor */}
+            <div className="flex-1 min-h-0">
+              {/* BACKGROUND_CONTAINER */}
+              <div className="h-full bg-gray-900 rounded-lg p-6">
+                <textarea
+                    value={generatedCode || `// No code generated yet
 // PLC Copilot will generate Structured Text code here
 // based on your requirements and device context.
 
@@ -1250,10 +1475,14 @@ END_IF;
 qStatusLight := bMotorRunning;
 
 END_PROGRAM`}
-                </pre>
+                    onChange={(e) => setGeneratedCode(e.target.value)}
+                    className="w-full h-full resize-none bg-transparent text-gray-200 whitespace-pre font-mono text-sm border-none outline-none"
+                    spellCheck={false}
+                  />
+                  <div ref={codeEndRef} />
+                </div>
               </div>
             </div>
-          </div>
         );
       case "logs":
         return (
@@ -1300,7 +1529,7 @@ END_PROGRAM`}
 
             <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
               {/* Device Constants Section - Left Side */}
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 min-h-0 flex flex-col">
                 <div className="mb-3">
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div className="flex items-center gap-2">
@@ -1312,7 +1541,7 @@ END_PROGRAM`}
                       <div />
                     </div>
                   </div>
-                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto h-full">
+                <div className="flex-1 bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto min-h-0">
                   {/* Inputs inside the hierarchy widget */}
                   <form onSubmit={(e) => addDeviceConstant(e)} className="mb-1 flex items-center gap-2">
                     {/* Path is fixed to 'Device' for now */}
@@ -1355,7 +1584,10 @@ END_PROGRAM`}
                           
                           // Navigate through the full path
                           constant.path.forEach((pathPart) => {
-                            if (!current[pathPart]) current[pathPart] = {};
+                            // Only create object if key doesn't exist or if it's not already a string value
+                            if (!current[pathPart] || typeof current[pathPart] === 'string') {
+                              current[pathPart] = {};
+                            }
                             current = current[pathPart];
                           });
                           
@@ -1456,20 +1688,12 @@ END_PROGRAM`}
 
               {/* Information Section - Right Side */}
               <div className="flex-1 min-h-0 flex flex-col">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Information
-                  </h3>
-                  <button
-                    onClick={() => setIsEditingInformation(!isEditingInformation)}
-                    className="text-xs px-2 py-1 border border-gray-700 rounded hover:border-gray-500 text-gray-300 hover:text-white transition-colors"
-                  >
-                    {isEditingInformation ? 'Preview' : 'Edit'}
-                  </button>
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="w-4 h-4 text-gray-300" />
+                  <h3 className="text-sm font-medium text-gray-300">Information</h3>
                 </div>
                 <div className="flex-1 bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto min-h-0">
-                  {isEditingInformation ? (
+                  {isInformationFocused ? (
                     <textarea
                       value={informationInput}
                       onChange={(e) => {
@@ -1481,68 +1705,76 @@ END_PROGRAM`}
                           device_constants: prev.device_constants // Keep device_constants in sync
                         }));
                       }}
+                      onFocus={() => setIsInformationFocused(true)}
+                      onBlur={() => setIsInformationFocused(false)}
                       placeholder={informationPlaceholder}
                       className="w-full h-full min-h-[200px] bg-transparent resize-none outline-none placeholder-gray-500 text-gray-200 text-sm font-mono"
+                      autoFocus
                     />
                   ) : (
-                    <div className="w-full h-full min-h-[200px] prose prose-invert prose-sm max-w-none">
+                    <div 
+                      className="w-full h-full min-h-[200px] cursor-text"
+                      onClick={() => setIsInformationFocused(true)}
+                    >
                       {informationInput.trim() === '' || informationInput === informationPlaceholder ? (
                         <div className="text-gray-500 text-sm italic">{informationPlaceholder}</div>
                       ) : (
-                        <SafeReactMarkdown
-                          components={{
-                            // Headers
-                            h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-3 mt-4 first:mt-0" {...props} />,
-                            h2: ({node, ...props}) => <h2 className="text-base font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
-                            h3: ({node, ...props}) => <h3 className="text-sm font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
-                            h4: ({node, ...props}) => <h4 className="text-sm font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
-                            h5: ({node, ...props}) => <h5 className="text-xs font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
-                            h6: ({node, ...props}) => <h6 className="text-xs font-medium text-gray-300 mb-1 mt-2 first:mt-0" {...props} />,
-                            
-                            // Text formatting
-                            p: ({node, ...props}) => <p className="text-gray-300 mb-3 leading-relaxed" {...props} />,
-                            strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />,
-                            b: ({node, ...props}) => <b className="font-semibold text-gray-200" {...props} />,
-                            em: ({node, ...props}) => <em className="italic text-gray-300" {...props} />,
-                            i: ({node, ...props}) => <i className="italic text-gray-300" {...props} />,
-                            
-                            // Code
-                            code: ({node, ...props}) => {
-                              const isInline = node?.position?.start?.line === node?.position?.end?.line;
-                              if (isInline) {
-                                return <code className="bg-gray-800 text-gray-300 px-1 py-0.5 rounded text-sm font-mono" {...props} />;
-                              }
-                              return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />;
-                            },
-                            pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />,
-                            
-                            // Lists
-                            ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
-                            ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
-                            li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
-                            
-                            // Other elements
-                            blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-3" {...props} />,
-                            a: ({node, ...props}) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
-                            hr: ({node, ...props}) => <hr className="border-0 border-t border-gray-700 my-4" {...props} />,
-                            
-                            // Tables (GFM support)
-                            table: ({node, ...props}) => <table className="border-collapse border border-gray-600 my-3 w-full" {...props} />,
-                            thead: ({node, ...props}) => <thead className="bg-gray-800" {...props} />,
-                            tbody: ({node, ...props}) => <tbody {...props} />,
-                            tr: ({node, ...props}) => <tr className="border-b border-gray-600" {...props} />,
-                            th: ({node, ...props}) => <th className="border border-gray-600 px-3 py-2 text-gray-200 font-medium text-left" {...props} />,
-                            td: ({node, ...props}) => <td className="border border-gray-600 px-3 py-2 text-gray-300" {...props} />,
-                            
-                            // Task lists (GFM support)
-                            input: ({node, ...props}) => <input className="mr-2" {...props} />,
-                            
-                            // Line breaks
-                            br: ({node, ...props}) => <br {...props} />,
-                          }}
-                        >
-                          {informationInput}
-                        </SafeReactMarkdown>
+                        <div className="prose prose-invert prose-sm max-w-none">
+                          <SafeReactMarkdown
+                            components={{
+                              // Headers
+                              h1: ({ ...props }) => <h1 className="text-lg font-semibold text-gray-200 mb-3 mt-4 first:mt-0" {...props} />,
+                              h2: ({ ...props }) => <h2 className="text-base font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
+                              h3: ({ ...props }) => <h3 className="text-sm font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
+                              h4: ({ ...props }) => <h4 className="text-sm font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
+                              h5: ({ ...props }) => <h5 className="text-xs font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
+                              h6: ({ ...props }) => <h6 className="text-xs font-medium text-gray-300 mb-1 mt-2 first:mt-0" {...props} />,
+                              
+                              // Text formatting
+                              p: ({ ...props }) => <p className="text-gray-300 mb-3 leading-relaxed" {...props} />,
+                              strong: ({ ...props }) => <strong className="font-semibold text-gray-200" {...props} />,
+                              b: ({ ...props }) => <b className="font-semibold text-gray-200" {...props} />,
+                              em: ({ ...props }) => <em className="italic text-gray-300" {...props} />,
+                              i: ({ ...props }) => <i className="italic text-gray-300" {...props} />,
+                              
+                              // Code
+                              code: ({ node, ...props }: { node?: any; [key: string]: any }) => {
+                                const isInline = node?.position?.start?.line === node?.position?.end?.line;
+                                if (isInline) {
+                                  return <code className="bg-gray-800 text-gray-300 px-1 py-0.5 rounded text-sm font-mono" {...props} />;
+                                }
+                                return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />;
+                              },
+                              pre: ({ ...props }) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />,
+                              
+                              // Lists
+                              ul: ({ ...props }) => <ul className="list-disc list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
+                              ol: ({ ...props }) => <ol className="list-decimal list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
+                              li: ({ ...props }) => <li className="text-gray-300" {...props} />,
+                              
+                              // Other elements
+                              blockquote: ({ ...props }) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-3" {...props} />,
+                              a: ({ ...props }) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
+                              hr: ({ ...props }) => <hr className="border-0 border-t border-gray-700 my-4" {...props} />,
+                              
+                              // Tables (GFM support)
+                              table: ({ ...props }) => <table className="border-collapse border border-gray-600 my-3 w-full" {...props} />,
+                              thead: ({ ...props }) => <thead className="bg-gray-800" {...props} />,
+                              tbody: ({ ...props }) => <tbody {...props} />,
+                              tr: ({ ...props }) => <tr className="border-b border-gray-600" {...props} />,
+                              th: ({ ...props }) => <th className="border border-gray-600 px-3 py-2 text-gray-200 font-medium text-left" {...props} />,
+                              td: ({ ...props }) => <td className="border border-gray-600 px-3 py-2 text-gray-300" {...props} />,
+                              
+                              // Task lists (GFM support)
+                              input: ({ ...props }) => <input className="mr-2" {...props} />,
+                              
+                              // Line breaks
+                              br: ({ ...props }) => <br {...props} />,
+                            }}
+                          >
+                            {informationInput}
+                          </SafeReactMarkdown>
+                        </div>
                       )}
                     </div>
                   )}
@@ -1599,6 +1831,17 @@ END_PROGRAM`}
               </div>
             </div>
           </div>
+          
+          {/* Session Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleEndSession}
+              className="px-3 py-1 text-xs text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-500 rounded transition-colors"
+              title="End session and cleanup files"
+            >
+              End Session
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1626,7 +1869,11 @@ END_PROGRAM`}
                     size="sm"
                     onClick={handleSkipToCode}
                     disabled={isLoading || apiCallInProgress}
-                    className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 ml-3 bg-transparent disabled:opacity-50"
+                    className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 ml-3 bg-transparent disabled:opacity-50 relative overflow-hidden"
+                    style={{
+                      backgroundImage: `linear-gradient(to right, rgba(75, 85, 99, 0.3) 0%, rgba(75, 85, 99, 0.3) ${(stageProgress?.confidence || 0) * 100}%, transparent ${(stageProgress?.confidence || 0) * 100}%, transparent 100%)`,
+                      transition: 'background-image 0.3s ease-in-out'
+                    }}
                   >
                     <SkipForward className="w-3 h-3 mr-1 text-gray-400" />
                     <span className="align-middle">Skip to Code</span>
@@ -1672,22 +1919,22 @@ END_PROGRAM`}
                           
                           components={{
                             // Headers
-                            h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
-                            h2: ({node, ...props}) => <h2 className="text-base font-semibold text-gray-200 mb-2" {...props} />,
-                            h3: ({node, ...props}) => <h3 className="text-sm font-semibold text-gray-200 mb-1" {...props} />,
-                            h4: ({node, ...props}) => <h4 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
-                            h5: ({node, ...props}) => <h5 className="text-xs font-medium text-gray-200 mb-1" {...props} />,
-                            h6: ({node, ...props}) => <h6 className="text-xs font-medium text-gray-300 mb-1" {...props} />,
+                            h1: ({ ...props }) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
+                            h2: ({ ...props }) => <h2 className="text-base font-semibold text-gray-200 mb-2" {...props} />,
+                            h3: ({ ...props }) => <h3 className="text-sm font-semibold text-gray-200 mb-1" {...props} />,
+                            h4: ({ ...props }) => <h4 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
+                            h5: ({ ...props }) => <h5 className="text-xs font-medium text-gray-200 mb-1" {...props} />,
+                            h6: ({ ...props }) => <h6 className="text-xs font-medium text-gray-300 mb-1" {...props} />,
                             
                             // Text formatting
-                            p: ({node, ...props}) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
-                            strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />,
-                            b: ({node, ...props}) => <b className="font-semibold text-gray-200" {...props} />,
-                            em: ({node, ...props}) => <em className="italic text-gray-300" {...props} />,
-                            i: ({node, ...props}) => <i className="italic text-gray-300" {...props} />,
+                            p: ({ ...props }) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
+                            strong: ({ ...props }) => <strong className="font-semibold text-gray-200" {...props} />,
+                            b: ({ ...props }) => <b className="font-semibold text-gray-200" {...props} />,
+                            em: ({ ...props }) => <em className="italic text-gray-300" {...props} />,
+                            i: ({ ...props }) => <i className="italic text-gray-300" {...props} />,
                             
                             // Code
-                            code: ({node, ...props}) => {
+                            code: ({ node, ...props }: { node?: any; [key: string]: any }) => {
                               // Check if this is inline code by looking at parent node
                               const isInline = node?.position?.start?.line === node?.position?.end?.line;
                               if (isInline) {
@@ -1695,31 +1942,31 @@ END_PROGRAM`}
                               }
                               return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />;
                             },
-                            pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />,
+                            pre: ({ ...props }) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />,
                             
                             // Lists
-                            ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
-                            ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
-                            li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
+                            ul: ({ ...props }) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                            ol: ({ ...props }) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                            li: ({ ...props }) => <li className="text-gray-300" {...props} />,
                             
                             // Other elements
-                            blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-2" {...props} />,
-                            a: ({node, ...props}) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
-                            hr: ({node, ...props}) => <hr className="border-0 border-t border-gray-700 my-3" {...props} />,
+                            blockquote: ({ ...props }) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-2" {...props} />,
+                            a: ({ ...props }) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
+                            hr: ({ ...props }) => <hr className="border-0 border-t border-gray-700 my-3" {...props} />,
                             
                             // Tables (GFM support)
-                            table: ({node, ...props}) => <table className="border-collapse border border-gray-600 my-2" {...props} />,
-                            thead: ({node, ...props}) => <thead className="bg-gray-800" {...props} />,
-                            tbody: ({node, ...props}) => <tbody {...props} />,
-                            tr: ({node, ...props}) => <tr className="border-b border-gray-600" {...props} />,
-                            th: ({node, ...props}) => <th className="border border-gray-600 px-2 py-1 text-gray-200 font-medium text-left" {...props} />,
-                            td: ({node, ...props}) => <td className="border border-gray-600 px-2 py-1 text-gray-300" {...props} />,
+                            table: ({ ...props }) => <table className="border-collapse border border-gray-600 my-2" {...props} />,
+                            thead: ({ ...props }) => <thead className="bg-gray-800" {...props} />,
+                            tbody: ({ ...props }) => <tbody {...props} />,
+                            tr: ({ ...props }) => <tr className="border-b border-gray-600" {...props} />,
+                            th: ({ ...props }) => <th className="border border-gray-600 px-2 py-1 text-gray-200 font-medium text-left" {...props} />,
+                            td: ({ ...props }) => <td className="border border-gray-600 px-2 py-1 text-gray-300" {...props} />,
                             
                             // Task lists (GFM support)
-                            input: ({node, ...props}) => <input className="mr-2" {...props} />,
+                            input: ({ ...props }) => <input className="mr-2" {...props} />,
                             
                             // Line breaks
-                            br: ({node, ...props}) => <br {...props} />,
+                            br: ({ ...props }) => <br {...props} />,
                           }}
                         >
                           {message.content}
@@ -1796,23 +2043,23 @@ END_PROGRAM`}
                                       
                                       components={{
                                         // Inline-optimized components for MCQ buttons
-                                        p: ({node, ...props}) => <span className="text-current" {...props} />,
-                                        strong: ({node, ...props}) => <strong className="font-semibold text-current" {...props} />,
-                                        b: ({node, ...props}) => <b className="font-semibold text-current" {...props} />,
-                                        em: ({node, ...props}) => <em className="italic text-current" {...props} />,
-                                        i: ({node, ...props}) => <i className="italic text-current" {...props} />,
-                                        code: ({node, ...props}) => <code className="bg-gray-700 text-current px-1 rounded text-xs" {...props} />,
-                                        a: ({node, ...props}) => <a className="text-current underline" {...props} />,
+                                        p: ({ ...props }) => <span className="text-current" {...props} />,
+                                        strong: ({ ...props }) => <strong className="font-semibold text-current" {...props} />,
+                                        b: ({ ...props }) => <b className="font-semibold text-current" {...props} />,
+                                        em: ({ ...props }) => <em className="italic text-current" {...props} />,
+                                        i: ({ ...props }) => <i className="italic text-current" {...props} />,
+                                        code: ({ ...props }) => <code className="bg-gray-700 text-current px-1 rounded text-xs" {...props} />,
+                                        a: ({ ...props }) => <a className="text-current underline" {...props} />,
                                         // Remove block elements that don't make sense in buttons
-                                        h1: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
-                                        h2: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
-                                        h3: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
-                                        ul: ({node, ...props}) => <span className="text-current" {...props} />,
-                                        ol: ({node, ...props}) => <span className="text-current" {...props} />,
-                                        li: ({node, ...props}) => <span className="text-current" {...props} />,
-                                        blockquote: ({node, ...props}) => <span className="italic text-current" {...props} />,
-                                        pre: ({node, ...props}) => <span className="font-mono text-current" {...props} />,
-                                        br: ({node, ...props}) => <span className="text-current" {...props} />,
+                                        h1: ({ ...props }) => <span className="font-semibold text-current" {...props} />,
+                                        h2: ({ ...props }) => <span className="font-semibold text-current" {...props} />,
+                                        h3: ({ ...props }) => <span className="font-semibold text-current" {...props} />,
+                                        ul: ({ ...props }) => <span className="text-current" {...props} />,
+                                        ol: ({ ...props }) => <span className="text-current" {...props} />,
+                                        li: ({ ...props }) => <span className="text-current" {...props} />,
+                                        blockquote: ({ ...props }) => <span className="italic text-current" {...props} />,
+                                        pre: ({ ...props }) => <span className="font-mono text-current" {...props} />,
+                                        br: ({ ...props }) => <span className="text-current" {...props} />,
                                       }}
                                     >
                                       {option}
@@ -2024,7 +2271,11 @@ END_PROGRAM`}
                         size="sm"
                         onClick={handleGenerateClick}
                         disabled={isLoading || apiCallInProgress}
-                        className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 bg-transparent disabled:opacity-50"
+                        className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 bg-transparent disabled:opacity-50 relative overflow-hidden"
+                        style={{
+                          backgroundImage: `linear-gradient(to right, rgba(75, 85, 99, 0.3) 0%, rgba(75, 85, 99, 0.3) ${(stageProgress?.confidence || 0) * 100}%, transparent ${(stageProgress?.confidence || 0) * 100}%, transparent 100%)`,
+                          transition: 'background-image 0.3s ease-in-out'
+                        }}
                       >
                         <SkipForward className="w-3 h-3 mr-1 text-gray-400" />
                         <span className="align-middle">Skip to Code</span>
@@ -2073,22 +2324,22 @@ END_PROGRAM`}
                                 
                                 components={{
                                   // Headers
-                                  h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
-                                  h2: ({node, ...props}) => <h2 className="text-base font-semibold text-gray-200 mb-2" {...props} />,
-                                  h3: ({node, ...props}) => <h3 className="text-sm font-semibold text-gray-200 mb-1" {...props} />,
-                                  h4: ({node, ...props}) => <h4 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
-                                  h5: ({node, ...props}) => <h5 className="text-xs font-medium text-gray-200 mb-1" {...props} />,
-                                  h6: ({node, ...props}) => <h6 className="text-xs font-medium text-gray-300 mb-1" {...props} />,
+                                  h1: ({ ...props }) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
+                                  h2: ({ ...props }) => <h2 className="text-base font-semibold text-gray-200 mb-2" {...props} />,
+                                  h3: ({ ...props }) => <h3 className="text-sm font-semibold text-gray-200 mb-1" {...props} />,
+                                  h4: ({ ...props }) => <h4 className="text-sm font-medium text-gray-200 mb-1" {...props} />,
+                                  h5: ({ ...props }) => <h5 className="text-xs font-medium text-gray-200 mb-1" {...props} />,
+                                  h6: ({ ...props }) => <h6 className="text-xs font-medium text-gray-300 mb-1" {...props} />,
                                   
                                   // Text formatting
-                                  p: ({node, ...props}) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
-                                  strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />,
-                                  b: ({node, ...props}) => <b className="font-semibold text-gray-200" {...props} />,
-                                  em: ({node, ...props}) => <em className="italic text-gray-300" {...props} />,
-                                  i: ({node, ...props}) => <i className="italic text-gray-300" {...props} />,
+                                  p: ({ ...props }) => <p className="text-gray-300 mb-2 leading-relaxed" {...props} />,
+                                  strong: ({ ...props }) => <strong className="font-semibold text-gray-200" {...props} />,
+                                  b: ({ ...props }) => <b className="font-semibold text-gray-200" {...props} />,
+                                  em: ({ ...props }) => <em className="italic text-gray-300" {...props} />,
+                                  i: ({ ...props }) => <i className="italic text-gray-300" {...props} />,
                                   
                                   // Code
-                                  code: ({node, ...props}) => {
+                                  code: ({ node, ...props }: { node?: any; [key: string]: any }) => {
                                     // Check if this is inline code by looking at parent node
                                     const isInline = node?.position?.start?.line === node?.position?.end?.line;
                                     if (isInline) {
@@ -2096,31 +2347,31 @@ END_PROGRAM`}
                                     }
                                     return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />;
                                   },
-                                  pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />,
+                                  pre: ({ ...props }) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2" {...props} />,
                                   
                                   // Lists
-                                  ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
-                                  ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
-                                  li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
+                                  ul: ({ ...props }) => <ul className="list-disc list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                                  ol: ({ ...props }) => <ol className="list-decimal list-inside text-gray-300 mb-2 space-y-1 ml-2" {...props} />,
+                                  li: ({ ...props }) => <li className="text-gray-300" {...props} />,
                                   
                                   // Other elements
-                                  blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-2" {...props} />,
-                                  a: ({node, ...props}) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
-                                  hr: ({node, ...props}) => <hr className="border-0 border-t border-gray-700 my-3" {...props} />,
+                                  blockquote: ({ ...props }) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-2" {...props} />,
+                                  a: ({ ...props }) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
+                                  hr: ({ ...props }) => <hr className="border-0 border-t border-gray-700 my-3" {...props} />,
                                   
                                   // Tables (GFM support)
-                                  table: ({node, ...props}) => <table className="border-collapse border border-gray-600 my-2" {...props} />,
-                                  thead: ({node, ...props}) => <thead className="bg-gray-800" {...props} />,
-                                  tbody: ({node, ...props}) => <tbody {...props} />,
-                                  tr: ({node, ...props}) => <tr className="border-b border-gray-600" {...props} />,
-                                  th: ({node, ...props}) => <th className="border border-gray-600 px-2 py-1 text-gray-200 font-medium text-left" {...props} />,
-                                  td: ({node, ...props}) => <td className="border border-gray-600 px-2 py-1 text-gray-300" {...props} />,
+                                  table: ({ ...props }) => <table className="border-collapse border border-gray-600 my-2" {...props} />,
+                                  thead: ({ ...props }) => <thead className="bg-gray-800" {...props} />,
+                                  tbody: ({ ...props }) => <tbody {...props} />,
+                                  tr: ({ ...props }) => <tr className="border-b border-gray-600" {...props} />,
+                                  th: ({ ...props }) => <th className="border border-gray-600 px-2 py-1 text-gray-200 font-medium text-left" {...props} />,
+                                  td: ({ ...props }) => <td className="border border-gray-600 px-2 py-1 text-gray-300" {...props} />,
                                   
                                   // Task lists (GFM support)
-                                  input: ({node, ...props}) => <input className="mr-2" {...props} />,
+                                  input: ({ ...props }) => <input className="mr-2" {...props} />,
                                   
                                   // Line breaks
-                                  br: ({node, ...props}) => <br {...props} />,
+                                  br: ({ ...props }) => <br {...props} />,
                                 }}
                               >
                                 {message.content}
@@ -2197,23 +2448,23 @@ END_PROGRAM`}
                                             
                                             components={{
                                               // Inline-optimized components for MCQ buttons
-                                              p: ({node, ...props}) => <span className="text-current" {...props} />,
-                                              strong: ({node, ...props}) => <strong className="font-semibold text-current" {...props} />,
-                                              b: ({node, ...props}) => <b className="font-semibold text-current" {...props} />,
-                                              em: ({node, ...props}) => <em className="italic text-current" {...props} />,
-                                              i: ({node, ...props}) => <i className="italic text-current" {...props} />,
-                                              code: ({node, ...props}) => <code className="bg-gray-700 text-current px-1 rounded text-xs" {...props} />,
-                                              a: ({node, ...props}) => <a className="text-current underline" {...props} />,
+                                              p: ({ ...props }) => <span className="text-current" {...props} />,
+                                              strong: ({ ...props }) => <strong className="font-semibold text-current" {...props} />,
+                                              b: ({ ...props }) => <b className="font-semibold text-current" {...props} />,
+                                              em: ({ ...props }) => <em className="italic text-current" {...props} />,
+                                              i: ({ ...props }) => <i className="italic text-current" {...props} />,
+                                              code: ({ ...props }) => <code className="bg-gray-700 text-current px-1 rounded text-xs" {...props} />,
+                                              a: ({ ...props }) => <a className="text-current underline" {...props} />,
                                               // Remove block elements that don't make sense in buttons
-                                              h1: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
-                                              h2: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
-                                              h3: ({node, ...props}) => <span className="font-semibold text-current" {...props} />,
-                                              ul: ({node, ...props}) => <span className="text-current" {...props} />,
-                                              ol: ({node, ...props}) => <span className="text-current" {...props} />,
-                                              li: ({node, ...props}) => <span className="text-current" {...props} />,
-                                              blockquote: ({node, ...props}) => <span className="italic text-current" {...props} />,
-                                              pre: ({node, ...props}) => <span className="font-mono text-current" {...props} />,
-                                              br: ({node, ...props}) => <span className="text-current" {...props} />,
+                                              h1: ({ ...props }) => <span className="font-semibold text-current" {...props} />,
+                                              h2: ({ ...props }) => <span className="font-semibold text-current" {...props} />,
+                                              h3: ({ ...props }) => <span className="font-semibold text-current" {...props} />,
+                                              ul: ({ ...props }) => <span className="text-current" {...props} />,
+                                              ol: ({ ...props }) => <span className="text-current" {...props} />,
+                                              li: ({ ...props }) => <span className="text-current" {...props} />,
+                                              blockquote: ({ ...props }) => <span className="italic text-current" {...props} />,
+                                              pre: ({ ...props }) => <span className="font-mono text-current" {...props} />,
+                                              br: ({ ...props }) => <span className="text-current" {...props} />,
                                             }}
                                           >
                                             {option}
@@ -2363,7 +2614,7 @@ END_PROGRAM`}
               </div>
             ) : (
               /* Output views - Full height container */
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 h-full min-h-0">
                 {renderOutputContent()}
               </div>
             )}

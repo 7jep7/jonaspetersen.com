@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "@remix-run/react";
 import { ArrowLeft, MessageSquare, Trash2, Plus, Calendar, Clock, ExternalLink } from "lucide-react";
+import { apiClient } from "~/lib/api-client";
 
 interface Session {
   id: string;
@@ -51,20 +52,42 @@ export default function PLCCopilotSession() {
     setSelectedSessions(newSelected);
   };
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
+    const sessionIds = Array.from(selectedSessions);
+    
+    // Cleanup sessions from backend
+    try {
+      await apiClient.cleanupSession(sessionIds);
+      console.log(`Cleaned up ${sessionIds.length} session(s)`);
+    } catch (error) {
+      console.warn('Failed to cleanup some sessions:', error);
+      // Continue with local deletion even if backend cleanup fails
+    }
+    
+    // Remove from local state
     setSessions(prev => prev.filter(session => !selectedSessions.has(session.id)));
     setSelectedSessions(new Set());
+    
+    // Remove from localStorage
+    sessionIds.forEach(sessionId => {
+      localStorage.removeItem(`plc_copilot_context_${sessionId}`);
+    });
   };
 
   const createNewSession = () => {
+    // Generate a proper UUID for the new session
+    const sessionId = crypto.randomUUID();
     const newSession: Session = {
-      id: Date.now().toString(),
-      name: "New Project",
+      id: sessionId,
+      name: "New Project", 
       lastMessage: "",
       timestamp: new Date(),
       messageCount: 0
     };
     setSessions(prev => [newSession, ...prev]);
+    
+    // Initialize the session in the API client
+    // The API client will automatically use this session ID when we navigate to the project page
   };
 
   const formatTimestamp = (date: Date) => {

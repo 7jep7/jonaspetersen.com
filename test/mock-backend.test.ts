@@ -39,7 +39,7 @@ describe('Mock Backend Integration Tests', () => {
       is_mcq: false,
       is_multiselect: false,
       mcq_options: [],
-      gathering_requirements_progress: 50
+      gathering_requirements_estimated_progress: 50
     }
 
     const mockFetch = vi.fn().mockResolvedValue({
