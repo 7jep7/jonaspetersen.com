@@ -138,6 +138,29 @@ describe('PLCCopilotApiClient', () => {
       expect(formData.getAll('files')).toHaveLength(1)
     })
 
+    it('should send previous copilot message', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockResponse)
+      })
+      global.fetch = mockFetch
+
+      const previousMessage = 'What type of sensor are you using?'
+      
+      await apiClient.updateContext(
+        mockContext,
+        'gathering_requirements',
+        'A pressure sensor',
+        undefined,
+        undefined,
+        previousMessage
+      )
+
+      const formData = mockFetch.mock.calls[0][1].body as FormData
+      expect(formData.get('previous_copilot_message')).toBe(previousMessage)
+      expect(formData.get('message')).toBe('A pressure sensor')
+    })
+
     it('should handle API errors with detailed messages', async () => {
       const errorResponse = {
         detail: 'Invalid stage parameter'

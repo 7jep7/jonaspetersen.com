@@ -25,6 +25,61 @@ import { ConnectionStatus, ErrorMessage } from "~/components/ConnectionStatus";
 import { StageIndicator } from "~/components/StageIndicator";
 import { Button } from "~/components/ui/button";
 
+// Safe ReactMarkdown wrapper with fallback for Safari compatibility
+const SafeReactMarkdown = ({ children, components, ...props }: any) => {
+  try {
+    // First try with remark-gfm
+    return (
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={components}
+        {...props}
+      >
+        {children}
+      </ReactMarkdown>
+    );
+  } catch (error) {
+    console.warn('ReactMarkdown with remark-gfm failed, trying without plugins:', error);
+    
+    try {
+      // Try without remark-gfm for Safari compatibility
+      return (
+        <ReactMarkdown 
+          components={components}
+          {...props}
+        >
+          {children}
+        </ReactMarkdown>
+      );
+    } catch (fallbackError) {
+      // Final fallback for Safari/iOS compatibility issues
+      console.warn('ReactMarkdown completely failed, falling back to formatted text:', fallbackError);
+      
+      // Try to provide a better fallback by rendering basic formatting
+      const processText = (text: string) => {
+        return text
+          // Convert **bold** to <strong>
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          // Convert single *italic* (avoiding double ** which was already processed)
+          .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+          // Convert `code` to <code>
+          .replace(/`(.*?)`/g, '<code style="background: #374151; padding: 0.125rem 0.25rem; border-radius: 0.25rem;">$1</code>')
+          // Convert line breaks
+          .replace(/\n/g, '<br />');
+      };
+      
+      return (
+        <div 
+          className="whitespace-pre-wrap text-gray-300"
+          dangerouslySetInnerHTML={{ 
+            __html: processText(children || '') 
+          }}
+        />
+      );
+    }
+  }
+};
+
 interface Message {
   id: string;
   content: string;
@@ -220,53 +275,19 @@ export default function PLCCopilotProject() {
   const [lastError, setLastError] = useState<string | null>(null);
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const [contextLoaded, setContextLoaded] = useState(false); // Track if context has been loaded from localStorage
+  const [isEditingInformation, setIsEditingInformation] = useState(false); // Toggle between edit and preview mode for information field
   
   // Context state
   const [projectContext, setProjectContext] = useState<ProjectContext>(() => {
-    const deviceConstants = [
-      // Sample data for testing
-      {
-        id: "1",
-        path: ["Device"],
-        name: "Model",
-        value: "VS-C1500CX",
-        source: "datasheet"
-      },
-      {
-        id: "2", 
-        path: ["Device"],
-        name: "Vendor",
-        value: "KEYENCE",
-        source: "datasheet"
-      },
-      {
-        id: "3",
-        path: ["Device"],
-        name: "Class", 
-        value: "Camera",
-        source: "datasheet"
-      },
-      {
-        id: "4",
-        path: ["Interface"],
-        name: "Type",
-        value: "Ethernet/IP",
-        source: "conversation"
-      },
-      {
-        id: "5",
-        path: ["Interface"],
-        name: "Role",
-        value: "peripheral",
-        source: "conversation"
-      }
-    ];
-    
+    // Start with empty device constants and information. Device constants will be
+    // populated from user inputs, datasheet parsing or API responses.
+    const deviceConstants: DeviceConstant[] = [];
     const information = "";
 
     return {
       deviceConstants,
-      device_constants: convertDeviceConstantsToApiFormat(deviceConstants),
+      device_constants: {},
       information
     };
   });
@@ -369,6 +390,23 @@ export default function PLCCopilotProject() {
     return stageMapping[stage] || 'gathering_requirements';
   };
 
+  // Helper function to get the previous copilot message for API context
+  const getPreviousCopilotMessage = (): string | undefined => {
+    // For project_kickoff stage, there should be no previous message
+    if (currentStage === 'project_kickoff') {
+      return undefined;
+    }
+    
+    // Find the last assistant message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') {
+        return messages[i].content;
+      }
+    }
+    
+    return undefined;
+  };
+
   const logTerminal = (line: string) => {
     setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
   };
@@ -403,8 +441,8 @@ export default function PLCCopilotProject() {
         // take subsequent lines until a blank or non-option
         for (let j = i+1; j < lines.length; j++) {
           const candidate = lines[j];
-          if (/^([A-Z]\)|\d\.|-|•)\s*/.test(candidate)) {
-            optionLines.push(candidate.replace(/^([A-Z]\)|\d\.|-|•)\s*/, '').trim());
+          if (/^([A-Z]\)|\d\.|-|\u2022)\s*/.test(candidate)) {
+            optionLines.push(candidate.replace(/^([A-Z]\)|\d\.|-|\u2022)\s*/, '').trim());
           } else if (/^[A-Z]\)\s*/.test(candidate)) {
             optionLines.push(candidate.replace(/^[A-Z]\)\s*/, '').trim());
           } else {
@@ -476,6 +514,8 @@ export default function PLCCopilotProject() {
       }
     } catch (err) {
       console.error('Failed to load persisted project context:', err);
+    } finally {
+      setContextLoaded(true); // Mark context as loaded regardless of success/failure
     }
   }, [sessionId]);
 
@@ -537,7 +577,8 @@ export default function PLCCopilotProject() {
     try {
     // Log outgoing LLM request (concise)
     const cleanedContext = getCleanedProjectContext();
-    logApiSummary('SEND', userMessage.content, cleanedContext);
+    const previousMessage = getPreviousCopilotMessage();
+    logApiSummary('SEND', userMessage.content, cleanedContext, previousMessage);
       // Call the new context API - works for both initial and follow-up messages
       const response: ContextResponse = await apiClient.updateContext(
         getCleanedProjectContext(),
@@ -549,7 +590,8 @@ export default function PLCCopilotProject() {
           const blob = new Blob([f.content || ''], { type: f.type });
           const file = new File([blob], f.name, { type: f.type });
           return file;
-        }) : undefined
+        }) : undefined,
+        getPreviousCopilotMessage() // previous copilot message for context
       );
 
   // Log brief response summary
@@ -565,14 +607,15 @@ export default function PLCCopilotProject() {
       }));
       
       // Update stage if changed
-      if (response.current_stage !== currentStage) {
-        // Map API stage names to UI stage names
-        const stageMapping: Record<string, typeof currentStage> = {
-          'gathering_requirements': 'gather_requirements',
-          'code_generation': 'code_generation',
-          'refinement_testing': 'refinement_testing'
-        };
-        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+      // Map API stage names to UI stage names for comparison
+      const stageMapping: Record<string, typeof currentStage> = {
+        'gathering_requirements': 'gather_requirements',
+        'code_generation': 'code_generation',
+        'refinement_testing': 'refinement_testing'
+      };
+      const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+      
+      if (mappedStage !== currentStage) {
         handleStageTransition(mappedStage, 'Backend updated stage');
       }
       
@@ -679,7 +722,12 @@ export default function PLCCopilotProject() {
   // Helper function to intelligently truncate context for logging
   const truncateContext = (context: any, maxLength: number = 200): string => {
     try {
-      const contextStr = JSON.stringify(context);
+      // For logging, focus on the API format (device_constants) to avoid duplication
+      const cleanContext = {
+        device_constants: context.device_constants || {},
+        information: context.information || ""
+      };
+      const contextStr = JSON.stringify(cleanContext);
       if (contextStr.length <= maxLength) return contextStr;
       
       // Try to show structure while keeping it brief
@@ -693,27 +741,47 @@ export default function PLCCopilotProject() {
   };
 
   // Compact API summary logger used to produce a single-line send/receive entry
-  const logApiSummary = (direction: 'SEND' | 'RECV', contentSnippet: string, context?: any) => {
+  const logApiSummary = (direction: 'SEND' | 'RECV', contentSnippet: string, context?: any, previousCopilotMessage?: string) => {
     const ts = new Date().toLocaleTimeString();
     const short = contentSnippet.replace(/\s+/g, ' ').trim().slice(0, 80);
     const contextSummary = context ? ` | CTX: ${truncateContext(context)}` : '';
-    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}${contextSummary}`);
+    
+    // Add previous copilot message info for SEND operations (truncated)
+    const prevMsgSummary = direction === 'SEND' && previousCopilotMessage 
+      ? ` | PREV: ${previousCopilotMessage.replace(/\s+/g, ' ').trim().slice(0, 40)}${previousCopilotMessage.length > 40 ? '…' : ''}`
+      : '';
+    
+    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}${contextSummary}${prevMsgSummary}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Collect all currently selected MCQ options
+    // Determine the active assistant message whose MCQ selections should be submitted.
+    // UI only allows interacting with the most recent assistant MCQ, so we should only
+    // send selections for that message to avoid leaking earlier answers.
     const allSelectedOptions: string[] = [];
     const mcqSelectionMessages: string[] = [];
-    
-    Object.keys(selectedMcqOptions).forEach(messageId => {
-      const selections = selectedMcqOptions[messageId];
-      if (selections && selections.length > 0) {
+
+    // Find the latest assistant message that has MCQ options and is interactive
+    let activeAssistantMessageId: string | null = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === 'assistant' && m.mcqOptions && m.mcqOptions.length > 0) {
+        // The UI treats the latest assistant (or the one directly before the latest user
+        // message) as the interactive MCQ. We'll pick this message id as the active one.
+        activeAssistantMessageId = m.id;
+        break;
+      }
+    }
+
+    if (activeAssistantMessageId) {
+      const selections = selectedMcqOptions[activeAssistantMessageId] || [];
+      if (selections.length > 0) {
         allSelectedOptions.push(...selections);
         mcqSelectionMessages.push(`Selected options: ${selections.join(', ')}`);
       }
-    });
+    }
     
     // Require either text input or MCQ selections
     if (!input.trim() && allSelectedOptions.length === 0) {
@@ -723,7 +791,7 @@ export default function PLCCopilotProject() {
     if (isLoading) return;
 
     // Handle MCQ-only submissions (no user message created)
-    if (!input.trim() && allSelectedOptions.length > 0) {
+  if (!input.trim() && allSelectedOptions.length > 0) {
       // Clear inputs but keep MCQ selections visible
       setInput("");
       setUploadedFiles([]);
@@ -737,16 +805,17 @@ export default function PLCCopilotProject() {
 
       try {
         // Construct MCQ selections for API
-        const stripped = allSelectedOptions.map(o => stripMarkdown(o));
+  const stripped = allSelectedOptions.map(o => stripMarkdown(o));
 
-        logApiSummary('SEND', `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`, getCleanedProjectContext());
+        logApiSummary('SEND', `MCQ_SELECTIONS: ${stripped.join(' ||| ')}`, getCleanedProjectContext(), getPreviousCopilotMessage());
 
         const response: ContextResponse = await apiClient.updateContext(
           getCleanedProjectContext(),
           convertStageToApiFormat(currentStage),
           undefined, // no message
           stripped, // mcqResponses
-          undefined // no files
+          undefined, // no files
+          getPreviousCopilotMessage() // previous copilot message for context
         );
 
         logApiSummary('RECV', response.chat_message, response.updated_context);
@@ -761,13 +830,15 @@ export default function PLCCopilotProject() {
         }));
         
         // Update stage if changed
-        if (response.current_stage !== currentStage) {
-          const stageMapping: Record<string, typeof currentStage> = {
-            'gathering_requirements': 'gather_requirements',
-            'code_generation': 'code_generation',
-            'refinement_testing': 'refinement_testing'
-          };
-          const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+        // Map API stage names to UI stage names for comparison
+        const stageMapping: Record<string, typeof currentStage> = {
+          'gathering_requirements': 'gather_requirements',
+          'code_generation': 'code_generation',
+          'refinement_testing': 'refinement_testing'
+        };
+        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+        
+        if (mappedStage !== currentStage) {
           handleStageTransition(mappedStage, 'Backend updated stage');
         }
         
@@ -846,7 +917,8 @@ export default function PLCCopilotProject() {
       const stripped = allSelectedOptions.length > 0 ? allSelectedOptions.map(o => stripMarkdown(o)) : [];
 
       // Log outgoing LLM request for submitted input (compact)
-      logApiSummary('SEND', `${stripped.length > 0 ? `MCQ: ${stripped.join(', ')} + ` : ''}${visibleContent}`, getCleanedProjectContext());
+      const previousMessage = getPreviousCopilotMessage();
+      logApiSummary('SEND', `${stripped.length > 0 ? `MCQ: ${stripped.join(', ')} + ` : ''}${visibleContent}`, getCleanedProjectContext(), previousMessage);
 
       // Call the new context API - include MCQ selections
       const response: ContextResponse = await apiClient.updateContext(
@@ -859,7 +931,8 @@ export default function PLCCopilotProject() {
           const blob = new Blob([f.content || ''], { type: f.type });
           const file = new File([blob], f.name, { type: f.type });
           return file;
-        }) : undefined
+        }) : undefined,
+        getPreviousCopilotMessage() // previous copilot message for context
       );
       
       logApiSummary('RECV', response.chat_message, response.updated_context);
@@ -874,13 +947,15 @@ export default function PLCCopilotProject() {
       }));
       
       // Update stage if changed
-      if (response.current_stage !== currentStage) {
-        const stageMapping: Record<string, typeof currentStage> = {
-          'gathering_requirements': 'gather_requirements',
-          'code_generation': 'code_generation',
-          'refinement_testing': 'refinement_testing'
-        };
-        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+      // Map API stage names to UI stage names for comparison
+      const stageMapping: Record<string, typeof currentStage> = {
+        'gathering_requirements': 'gather_requirements',
+        'code_generation': 'code_generation',
+        'refinement_testing': 'refinement_testing'
+      };
+      const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+      
+      if (mappedStage !== currentStage) {
         handleStageTransition(mappedStage, 'Backend updated stage');
       }
       
@@ -1096,7 +1171,7 @@ export default function PLCCopilotProject() {
 
   // Persist projectContext to localStorage when it changes
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !contextLoaded) return;
     try {
       const key = `plc_copilot_context_${sessionId ?? 'default'}`;
       localStorage.setItem(key, JSON.stringify(projectContext));
@@ -1104,7 +1179,7 @@ export default function PLCCopilotProject() {
     } catch (e) {
       console.error('Failed to persist project context:', e);
     }
-  }, [projectContext, sessionId]);
+  }, [projectContext, sessionId, contextLoaded]);
 
   // Cleanup resize event listeners on unmount
   useEffect(() => {
@@ -1266,10 +1341,10 @@ END_PROGRAM`}
                       Add
                     </button>
                   </form>
-                  <div className="text-xs text-gray-500 mt-1">Use dot notation in name field for hierarchy, e.g. <span className="font-mono">Device.Interface.Type</span></div>
+                  <div className="text-xs text-gray-500">Use dot notation in name field for hierarchy, e.g. <span className="font-mono">Device.Interface.Type</span></div>
 
                   {projectContext.deviceConstants.length === 0 ? (
-                    <div className="text-gray-500 text-sm">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
+                    <div className="text-gray-500 text-sm mt-3">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
                   ) : (
                     <div className="space-y-2">
                       {(() => {
@@ -1380,26 +1455,97 @@ END_PROGRAM`}
               </div>
 
               {/* Information Section - Right Side */}
-              <div className="flex-1 min-h-0">
-                <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Information
-                </h3>
-                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto h-full">
-                  <textarea
-                    value={informationInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setInformationInput(val);
-                      setProjectContext(prev => ({ 
-                        ...prev, 
-                        information: val,
-                        device_constants: prev.device_constants // Keep device_constants in sync
-                      }));
-                    }}
-                    placeholder={informationPlaceholder}
-                    className="w-full h-full min-h-[200px] bg-transparent resize-none outline-none placeholder-gray-500 text-gray-200 text-sm"
-                  />
+              <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Information
+                  </h3>
+                  <button
+                    onClick={() => setIsEditingInformation(!isEditingInformation)}
+                    className="text-xs px-2 py-1 border border-gray-700 rounded hover:border-gray-500 text-gray-300 hover:text-white transition-colors"
+                  >
+                    {isEditingInformation ? 'Preview' : 'Edit'}
+                  </button>
+                </div>
+                <div className="flex-1 bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto min-h-0">
+                  {isEditingInformation ? (
+                    <textarea
+                      value={informationInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInformationInput(val);
+                        setProjectContext(prev => ({ 
+                          ...prev, 
+                          information: val,
+                          device_constants: prev.device_constants // Keep device_constants in sync
+                        }));
+                      }}
+                      placeholder={informationPlaceholder}
+                      className="w-full h-full min-h-[200px] bg-transparent resize-none outline-none placeholder-gray-500 text-gray-200 text-sm font-mono"
+                    />
+                  ) : (
+                    <div className="w-full h-full min-h-[200px] prose prose-invert prose-sm max-w-none">
+                      {informationInput.trim() === '' || informationInput === informationPlaceholder ? (
+                        <div className="text-gray-500 text-sm italic">{informationPlaceholder}</div>
+                      ) : (
+                        <SafeReactMarkdown
+                          components={{
+                            // Headers
+                            h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-3 mt-4 first:mt-0" {...props} />,
+                            h2: ({node, ...props}) => <h2 className="text-base font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-sm font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
+                            h4: ({node, ...props}) => <h4 className="text-sm font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
+                            h5: ({node, ...props}) => <h5 className="text-xs font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
+                            h6: ({node, ...props}) => <h6 className="text-xs font-medium text-gray-300 mb-1 mt-2 first:mt-0" {...props} />,
+                            
+                            // Text formatting
+                            p: ({node, ...props}) => <p className="text-gray-300 mb-3 leading-relaxed" {...props} />,
+                            strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />,
+                            b: ({node, ...props}) => <b className="font-semibold text-gray-200" {...props} />,
+                            em: ({node, ...props}) => <em className="italic text-gray-300" {...props} />,
+                            i: ({node, ...props}) => <i className="italic text-gray-300" {...props} />,
+                            
+                            // Code
+                            code: ({node, ...props}) => {
+                              const isInline = node?.position?.start?.line === node?.position?.end?.line;
+                              if (isInline) {
+                                return <code className="bg-gray-800 text-gray-300 px-1 py-0.5 rounded text-sm font-mono" {...props} />;
+                              }
+                              return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />;
+                            },
+                            pre: ({node, ...props}) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />,
+                            
+                            // Lists
+                            ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
+                            ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
+                            li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
+                            
+                            // Other elements
+                            blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-3" {...props} />,
+                            a: ({node, ...props}) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
+                            hr: ({node, ...props}) => <hr className="border-0 border-t border-gray-700 my-4" {...props} />,
+                            
+                            // Tables (GFM support)
+                            table: ({node, ...props}) => <table className="border-collapse border border-gray-600 my-3 w-full" {...props} />,
+                            thead: ({node, ...props}) => <thead className="bg-gray-800" {...props} />,
+                            tbody: ({node, ...props}) => <tbody {...props} />,
+                            tr: ({node, ...props}) => <tr className="border-b border-gray-600" {...props} />,
+                            th: ({node, ...props}) => <th className="border border-gray-600 px-3 py-2 text-gray-200 font-medium text-left" {...props} />,
+                            td: ({node, ...props}) => <td className="border border-gray-600 px-3 py-2 text-gray-300" {...props} />,
+                            
+                            // Task lists (GFM support)
+                            input: ({node, ...props}) => <input className="mr-2" {...props} />,
+                            
+                            // Line breaks
+                            br: ({node, ...props}) => <br {...props} />,
+                          }}
+                        >
+                          {informationInput}
+                        </SafeReactMarkdown>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1522,8 +1668,8 @@ END_PROGRAM`}
                       </div>
                     ) : (
                       <div className="max-w-[85%] text-gray-100">
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
+                        <SafeReactMarkdown
+                          
                           components={{
                             // Headers
                             h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
@@ -1577,7 +1723,7 @@ END_PROGRAM`}
                           }}
                         >
                           {message.content}
-                        </ReactMarkdown>
+                        </SafeReactMarkdown>
                         <time className="text-xs opacity-50 mt-1 block text-gray-400">
                           {message.timestamp.toLocaleTimeString()}
                         </time>
@@ -1646,8 +1792,8 @@ END_PROGRAM`}
                                     }`} />
                                   )}
                                   <div className="text-sm leading-relaxed flex-1">
-                                    <ReactMarkdown 
-                                      remarkPlugins={[remarkGfm]}
+                                    <SafeReactMarkdown
+                                      
                                       components={{
                                         // Inline-optimized components for MCQ buttons
                                         p: ({node, ...props}) => <span className="text-current" {...props} />,
@@ -1670,7 +1816,7 @@ END_PROGRAM`}
                                       }}
                                     >
                                       {option}
-                                    </ReactMarkdown>
+                                    </SafeReactMarkdown>
                                   </div>
                                 </div>
                               </button>
@@ -1923,8 +2069,8 @@ END_PROGRAM`}
                             </div>
                           ) : (
                             <div className="max-w-[85%] text-gray-100">
-                              <ReactMarkdown 
-                                remarkPlugins={[remarkGfm]}
+                              <SafeReactMarkdown
+                                
                                 components={{
                                   // Headers
                                   h1: ({node, ...props}) => <h1 className="text-lg font-semibold text-gray-200 mb-2" {...props} />,
@@ -1978,7 +2124,7 @@ END_PROGRAM`}
                                 }}
                               >
                                 {message.content}
-                              </ReactMarkdown>
+                              </SafeReactMarkdown>
                               <time className="text-xs opacity-50 mt-1 block text-gray-400">
                                 {message.timestamp.toLocaleTimeString()}
                               </time>
@@ -2047,8 +2193,8 @@ END_PROGRAM`}
                                           }`} />
                                         )}
                                         <div className="text-sm leading-relaxed flex-1">
-                                          <ReactMarkdown 
-                                            remarkPlugins={[remarkGfm]}
+                                          <SafeReactMarkdown
+                                            
                                             components={{
                                               // Inline-optimized components for MCQ buttons
                                               p: ({node, ...props}) => <span className="text-current" {...props} />,
@@ -2071,7 +2217,7 @@ END_PROGRAM`}
                                             }}
                                           >
                                             {option}
-                                          </ReactMarkdown>
+                                          </SafeReactMarkdown>
                                         </div>
                                       </div>
                                     </button>
