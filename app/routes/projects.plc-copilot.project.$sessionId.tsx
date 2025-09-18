@@ -17,7 +17,8 @@ import {
   X,
   Paperclip,
   ArrowLeft,
-  SkipForward
+  SkipForward,
+  Download
 } from "lucide-react";
 import { Edit } from "lucide-react";
 import { apiClient, type ContextResponse, type ProjectContext as ApiProjectContext } from "~/lib/api-client";
@@ -470,12 +471,36 @@ export default function PLCCopilotProject() {
   // ...existing code...
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const codeEndRef = useRef<HTMLDivElement>(null);
   const apiCallInProgressRef = useRef(false);
   const resizingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const scrollCodeToBottom = () => {
+    const sentinel = codeEndRef.current;
+    if (!sentinel) return;
+
+    // Prefer scrollIntoView, but fallback to directly setting scrollTop on the scroll container
+    try {
+      sentinel.scrollIntoView({ behavior: 'smooth' });
+      return;
+    } catch (err) {
+      // ignore and try fallback
+    }
+
+    const scroller = sentinel.parentElement;
+    if (scroller) {
+      try {
+        scroller.scrollTop = scroller.scrollHeight;
+      } catch (e) {
+        // last resort
+        sentinel.scrollIntoView();
+      }
+    }
   };
 
   // Load uploaded files from localStorage on component mount
@@ -522,6 +547,25 @@ export default function PLCCopilotProject() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Auto-scroll code view when generatedCode updates or when ST tab becomes active
+  useEffect(() => {
+    if (activeView !== 'structured-text') return;
+
+    // Schedule scroll after paint to ensure DOM is ready
+    const id = window.setTimeout(() => {
+      try {
+        // Use requestAnimationFrame to wait for layout
+        window.requestAnimationFrame(() => {
+          scrollCodeToBottom();
+        });
+      } catch (e) {
+        scrollCodeToBottom();
+      }
+    }, 50);
+
+    return () => window.clearTimeout(id);
+  }, [generatedCode, activeView]);
 
   // Append lastError into terminal logs for quick visibility
   useEffect(() => {
@@ -1189,15 +1233,55 @@ export default function PLCCopilotProject() {
     };
   }, []);
 
+  // Download generated code function
+  const downloadGeneratedCode = () => {
+    if (!generatedCode) return;
+    
+    const blob = new Blob([generatedCode], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plc_program.st'; // .st is the common extension for Structured Text
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const renderOutputContent = () => {
     switch (activeView) {
       case "structured-text":
         return (
-          <div className="h-full p-6 flex flex-col min-h-0">
-            <div className="font-mono text-sm bg-gray-900 rounded-lg flex flex-col min-h-0 flex-1 overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-6 min-h-0">
-                <pre className="text-gray-200 whitespace-pre-wrap break-words">
-                  {generatedCode || `// No code generated yet
+          <div className="h-full flex flex-col">
+            {/* Sticky Header */}
+            <div className="sticky top-0 z-10 p-6 pb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FileText className="w-5 h-5 text-orange-500" />
+                  <h2 className="text-sm font-semibold">Structured Text</h2>
+                  <p className="text-xs text-gray-400">IEC 61131-3 programming language</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {generatedCode && (
+                    <button
+                      onClick={downloadGeneratedCode}
+                      className="flex items-center gap-2 text-xs text-gray-300 hover:text-white px-3 py-1 border border-gray-800 rounded bg-gray-900 hover:bg-gray-800 transition-colors"
+                      title="Download PLC program as .st file"
+                    >
+                      <Download className="w-3 h-3" />
+                      Download
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Scrollable Code Area */}
+            <div className="flex-1 p-6 min-h-0">
+              <div className="h-full bg-gray-900 rounded-lg flex flex-col min-h-0">
+                <div className="flex-1 overflow-y-auto min-h-0 relative">
+                  <textarea
+                    value={generatedCode || `// No code generated yet
 // PLC Copilot will generate Structured Text code here
 // based on your requirements and device context.
 
@@ -1250,7 +1334,13 @@ END_IF;
 qStatusLight := bMotorRunning;
 
 END_PROGRAM`}
-                </pre>
+                    onChange={(e) => setGeneratedCode(e.target.value)}
+                    className="w-full h-full resize-none bg-transparent text-gray-200 whitespace-pre font-mono text-sm border-none outline-none p-6"
+                    style={{ minHeight: '300px' }}
+                    spellCheck={false}
+                  />
+                  <div ref={codeEndRef} />
+                </div>
               </div>
             </div>
           </div>
