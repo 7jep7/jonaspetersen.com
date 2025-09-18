@@ -553,19 +553,20 @@ export default function PLCCopilotProject() {
   useEffect(() => {
     if (activeView !== 'structured-text') return;
 
-    // Schedule scroll after paint to ensure DOM is ready
-    const id = window.setTimeout(() => {
-      try {
-        // Use requestAnimationFrame to wait for layout
-        window.requestAnimationFrame(() => {
-          scrollCodeToBottom();
-        });
-      } catch (e) {
-        scrollCodeToBottom();
-      }
-    }, 50);
+    // TEMPORARILY DISABLED - This scroll function interferes with sticky header positioning
+    // TODO: Fix scroll to not affect sticky header
+    // const id = window.setTimeout(() => {
+    //   try {
+    //     // Use requestAnimationFrame to wait for layout
+    //     window.requestAnimationFrame(() => {
+    //       scrollCodeToBottom();
+    //     });
+    //   } catch (e) {
+    //     scrollCodeToBottom();
+    //   }
+    // }, 50);
 
-    return () => window.clearTimeout(id);
+    // return () => window.clearTimeout(id);
   }, [generatedCode, activeView]);
 
   // Append lastError into terminal logs for quick visibility
@@ -1236,9 +1237,62 @@ export default function PLCCopilotProject() {
 
   // Download generated code function
   const downloadGeneratedCode = () => {
-    if (!generatedCode) return;
+    // Get the current content from the textarea (either generatedCode or placeholder)
+    const content = generatedCode || `// No code generated yet
+// PLC Copilot will generate Structured Text code here
+// based on your requirements and device context.
+
+// Example placeholder:
+PROGRAM ConveyorControl
+VAR
+    bStart          : BOOL := FALSE;      // Start button
+    bStop           : BOOL := FALSE;      // Stop button  
+    bEmergencyStop  : BOOL := FALSE;      // E-stop
+    bMotorRunning   : BOOL := FALSE;      // Motor status
+    bSafetyOK       : BOOL := TRUE;       // Safety check
     
-    const blob = new Blob([generatedCode], { type: 'text/plain' });
+    // Inputs
+    bStartButton    : BOOL;
+    bStopButton     : BOOL;
+    bEStop          : BOOL;
+    bSafetyGate     : BOOL;
+    
+    // Outputs
+    qMotorContactor : BOOL;
+    qStatusLight    : BOOL;
+END_VAR
+
+// Main control logic
+IF bEStop OR NOT bSafetyGate THEN
+    bSafetyOK := FALSE;
+    qMotorContactor := FALSE;
+    bMotorRunning := FALSE;
+ELSE
+    bSafetyOK := TRUE;
+END_IF;
+
+// Start/Stop logic
+IF bStartButton AND bSafetyOK AND NOT bMotorRunning THEN
+    bStart := TRUE;
+ELSIF bStopButton OR NOT bSafetyOK THEN
+    bStart := FALSE;
+END_IF;
+
+// Motor control
+IF bStart AND bSafetyOK THEN
+    qMotorContactor := TRUE;
+    bMotorRunning := TRUE;
+ELSE
+    qMotorContactor := FALSE;
+    bMotorRunning := FALSE;
+END_IF;
+
+// Status indication
+qStatusLight := bMotorRunning;
+
+END_PROGRAM`;
+    
+    const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1253,35 +1307,32 @@ export default function PLCCopilotProject() {
     switch (activeView) {
       case "structured-text":
         return (
-          <div className="h-full flex flex-col">
-            {/* Sticky Header */}
-            <div className="sticky top-0 z-10 p-6 pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <FileText className="w-5 h-5 text-orange-500" />
-                  <h2 className="text-sm font-semibold">Structured Text</h2>
-                  <p className="text-xs text-gray-400">IEC 61131-3 programming language</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {generatedCode && (
-                    <button
-                      onClick={downloadGeneratedCode}
-                      className="flex items-center gap-2 text-xs text-gray-300 hover:text-white px-3 py-1 border border-gray-800 rounded bg-gray-900 hover:bg-gray-800 transition-colors"
-                      title="Download PLC program as .st file"
-                    >
-                      <Download className="w-3 h-3" />
-                      Download
-                    </button>
-                  )}
-                </div>
+          // ST_TAB_CONTENT_CONTAINER - Main container with full padding
+          <div className="h-full p-6 flex flex-col min-h-0">
+            
+            {/* ST_TAB_HEADER - Header with title, description, and download button */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <FileText className="w-5 h-5 text-orange-500" />
+                <h2 className="text-sm font-semibold">Structured Text</h2>
+                <p className="text-xs text-gray-400">IEC 61131-3 programming language</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={downloadGeneratedCode}
+                  className="p-2 text-gray-300 hover:text-white border border-gray-800 rounded bg-gray-900 hover:bg-gray-800 transition-colors"
+                  title="Download PLC program as .st file"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
-            {/* Scrollable Code Area */}
-            <div className="flex-1 p-6 min-h-0">
-              <div className="h-full bg-gray-900 rounded-lg flex flex-col min-h-0">
-                <div className="flex-1 overflow-y-auto min-h-0 relative">
-                  <textarea
+            {/* ST_EDITOR_CONTAINER - Contains the actual code editor */}
+            <div className="flex-1 min-h-0">
+              {/* BACKGROUND_CONTAINER */}
+              <div className="h-full bg-gray-900 rounded-lg p-6">
+                <textarea
                     value={generatedCode || `// No code generated yet
 // PLC Copilot will generate Structured Text code here
 // based on your requirements and device context.
@@ -1336,15 +1387,13 @@ qStatusLight := bMotorRunning;
 
 END_PROGRAM`}
                     onChange={(e) => setGeneratedCode(e.target.value)}
-                    className="w-full h-full resize-none bg-transparent text-gray-200 whitespace-pre font-mono text-sm border-none outline-none p-6"
-                    style={{ minHeight: 'calc(100vh - 200px)' }}
+                    className="w-full h-full resize-none bg-transparent text-gray-200 whitespace-pre font-mono text-sm border-none outline-none"
                     spellCheck={false}
                   />
                   <div ref={codeEndRef} />
                 </div>
               </div>
             </div>
-          </div>
         );
       case "logs":
         return (
@@ -2454,7 +2503,7 @@ END_PROGRAM`}
               </div>
             ) : (
               /* Output views - Full height container */
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 h-full min-h-0">
                 {renderOutputContent()}
               </div>
             )}
