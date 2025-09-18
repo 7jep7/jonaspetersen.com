@@ -281,7 +281,7 @@ export default function PLCCopilotProject() {
   const [apiCallInProgress, setApiCallInProgress] = useState(false);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [contextLoaded, setContextLoaded] = useState(false); // Track if context has been loaded from localStorage
-  const [isEditingInformation, setIsEditingInformation] = useState(false); // Toggle between edit and preview mode for information field
+  const [isInformationFocused, setIsInformationFocused] = useState(false); // Track if information textarea is focused
   
   // Context state
   const [projectContext, setProjectContext] = useState<ProjectContext>(() => {
@@ -1602,20 +1602,12 @@ END_PROGRAM`}
 
               {/* Information Section - Right Side */}
               <div className="flex-1 min-h-0 flex flex-col">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Information
-                  </h3>
-                  <button
-                    onClick={() => setIsEditingInformation(!isEditingInformation)}
-                    className="text-xs px-2 py-1 border border-gray-700 rounded hover:border-gray-500 text-gray-300 hover:text-white transition-colors"
-                  >
-                    {isEditingInformation ? 'Preview' : 'Edit'}
-                  </button>
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="w-4 h-4 text-gray-300" />
+                  <h3 className="text-sm font-medium text-gray-300">Information</h3>
                 </div>
                 <div className="flex-1 bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto min-h-0">
-                  {isEditingInformation ? (
+                  {isInformationFocused ? (
                     <textarea
                       value={informationInput}
                       onChange={(e) => {
@@ -1627,68 +1619,76 @@ END_PROGRAM`}
                           device_constants: prev.device_constants // Keep device_constants in sync
                         }));
                       }}
+                      onFocus={() => setIsInformationFocused(true)}
+                      onBlur={() => setIsInformationFocused(false)}
                       placeholder={informationPlaceholder}
                       className="w-full h-full min-h-[200px] bg-transparent resize-none outline-none placeholder-gray-500 text-gray-200 text-sm font-mono"
+                      autoFocus
                     />
                   ) : (
-                    <div className="w-full h-full min-h-[200px] prose prose-invert prose-sm max-w-none">
+                    <div 
+                      className="w-full h-full min-h-[200px] cursor-text"
+                      onClick={() => setIsInformationFocused(true)}
+                    >
                       {informationInput.trim() === '' || informationInput === informationPlaceholder ? (
                         <div className="text-gray-500 text-sm italic">{informationPlaceholder}</div>
                       ) : (
-                        <SafeReactMarkdown
-                          components={{
-                            // Headers
-                            h1: ({ ...props }) => <h1 className="text-lg font-semibold text-gray-200 mb-3 mt-4 first:mt-0" {...props} />,
-                            h2: ({ ...props }) => <h2 className="text-base font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
-                            h3: ({ ...props }) => <h3 className="text-sm font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
-                            h4: ({ ...props }) => <h4 className="text-sm font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
-                            h5: ({ ...props }) => <h5 className="text-xs font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
-                            h6: ({ ...props }) => <h6 className="text-xs font-medium text-gray-300 mb-1 mt-2 first:mt-0" {...props} />,
-                            
-                            // Text formatting
-                            p: ({ ...props }) => <p className="text-gray-300 mb-3 leading-relaxed" {...props} />,
-                            strong: ({ ...props }) => <strong className="font-semibold text-gray-200" {...props} />,
-                            b: ({ ...props }) => <b className="font-semibold text-gray-200" {...props} />,
-                            em: ({ ...props }) => <em className="italic text-gray-300" {...props} />,
-                            i: ({ ...props }) => <i className="italic text-gray-300" {...props} />,
-                            
-                            // Code
-                            code: ({ node, ...props }: { node?: any; [key: string]: any }) => {
-                              const isInline = node?.position?.start?.line === node?.position?.end?.line;
-                              if (isInline) {
-                                return <code className="bg-gray-800 text-gray-300 px-1 py-0.5 rounded text-sm font-mono" {...props} />;
-                              }
-                              return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />;
-                            },
-                            pre: ({ ...props }) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />,
-                            
-                            // Lists
-                            ul: ({ ...props }) => <ul className="list-disc list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
-                            ol: ({ ...props }) => <ol className="list-decimal list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
-                            li: ({ ...props }) => <li className="text-gray-300" {...props} />,
-                            
-                            // Other elements
-                            blockquote: ({ ...props }) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-3" {...props} />,
-                            a: ({ ...props }) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
-                            hr: ({ ...props }) => <hr className="border-0 border-t border-gray-700 my-4" {...props} />,
-                            
-                            // Tables (GFM support)
-                            table: ({ ...props }) => <table className="border-collapse border border-gray-600 my-3 w-full" {...props} />,
-                            thead: ({ ...props }) => <thead className="bg-gray-800" {...props} />,
-                            tbody: ({ ...props }) => <tbody {...props} />,
-                            tr: ({ ...props }) => <tr className="border-b border-gray-600" {...props} />,
-                            th: ({ ...props }) => <th className="border border-gray-600 px-3 py-2 text-gray-200 font-medium text-left" {...props} />,
-                            td: ({ ...props }) => <td className="border border-gray-600 px-3 py-2 text-gray-300" {...props} />,
-                            
-                            // Task lists (GFM support)
-                            input: ({ ...props }) => <input className="mr-2" {...props} />,
-                            
-                            // Line breaks
-                            br: ({ ...props }) => <br {...props} />,
-                          }}
-                        >
-                          {informationInput}
-                        </SafeReactMarkdown>
+                        <div className="prose prose-invert prose-sm max-w-none">
+                          <SafeReactMarkdown
+                            components={{
+                              // Headers
+                              h1: ({ ...props }) => <h1 className="text-lg font-semibold text-gray-200 mb-3 mt-4 first:mt-0" {...props} />,
+                              h2: ({ ...props }) => <h2 className="text-base font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
+                              h3: ({ ...props }) => <h3 className="text-sm font-semibold text-gray-200 mb-2 mt-3 first:mt-0" {...props} />,
+                              h4: ({ ...props }) => <h4 className="text-sm font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
+                              h5: ({ ...props }) => <h5 className="text-xs font-medium text-gray-200 mb-1 mt-2 first:mt-0" {...props} />,
+                              h6: ({ ...props }) => <h6 className="text-xs font-medium text-gray-300 mb-1 mt-2 first:mt-0" {...props} />,
+                              
+                              // Text formatting
+                              p: ({ ...props }) => <p className="text-gray-300 mb-3 leading-relaxed" {...props} />,
+                              strong: ({ ...props }) => <strong className="font-semibold text-gray-200" {...props} />,
+                              b: ({ ...props }) => <b className="font-semibold text-gray-200" {...props} />,
+                              em: ({ ...props }) => <em className="italic text-gray-300" {...props} />,
+                              i: ({ ...props }) => <i className="italic text-gray-300" {...props} />,
+                              
+                              // Code
+                              code: ({ node, ...props }: { node?: any; [key: string]: any }) => {
+                                const isInline = node?.position?.start?.line === node?.position?.end?.line;
+                                if (isInline) {
+                                  return <code className="bg-gray-800 text-gray-300 px-1 py-0.5 rounded text-sm font-mono" {...props} />;
+                                }
+                                return <code className="block bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />;
+                              },
+                              pre: ({ ...props }) => <pre className="bg-gray-800 text-gray-300 p-3 rounded-lg overflow-x-auto my-2 font-mono" {...props} />,
+                              
+                              // Lists
+                              ul: ({ ...props }) => <ul className="list-disc list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
+                              ol: ({ ...props }) => <ol className="list-decimal list-inside text-gray-300 mb-3 space-y-1 ml-2" {...props} />,
+                              li: ({ ...props }) => <li className="text-gray-300" {...props} />,
+                              
+                              // Other elements
+                              blockquote: ({ ...props }) => <blockquote className="border-l-2 border-gray-700 pl-3 text-gray-400 italic my-3" {...props} />,
+                              a: ({ ...props }) => <a className="text-orange-400 hover:text-orange-300 underline" {...props} />,
+                              hr: ({ ...props }) => <hr className="border-0 border-t border-gray-700 my-4" {...props} />,
+                              
+                              // Tables (GFM support)
+                              table: ({ ...props }) => <table className="border-collapse border border-gray-600 my-3 w-full" {...props} />,
+                              thead: ({ ...props }) => <thead className="bg-gray-800" {...props} />,
+                              tbody: ({ ...props }) => <tbody {...props} />,
+                              tr: ({ ...props }) => <tr className="border-b border-gray-600" {...props} />,
+                              th: ({ ...props }) => <th className="border border-gray-600 px-3 py-2 text-gray-200 font-medium text-left" {...props} />,
+                              td: ({ ...props }) => <td className="border border-gray-600 px-3 py-2 text-gray-300" {...props} />,
+                              
+                              // Task lists (GFM support)
+                              input: ({ ...props }) => <input className="mr-2" {...props} />,
+                              
+                              // Line breaks
+                              br: ({ ...props }) => <br {...props} />,
+                            }}
+                          >
+                            {informationInput}
+                          </SafeReactMarkdown>
+                        </div>
                       )}
                     </div>
                   )}
