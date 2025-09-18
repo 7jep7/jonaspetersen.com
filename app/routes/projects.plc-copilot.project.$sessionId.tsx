@@ -111,7 +111,10 @@ const convertDeviceConstantsToApiFormat = (deviceConstants: DeviceConstant[]): R
     // Navigate to the right location in the nested object
     for (let i = 0; i < fullPath.length - 1; i++) {
       const key = fullPath[i];
-      if (!current[key]) current[key] = {};
+      // Only create object if key doesn't exist or if it's not already a string value
+      if (!current[key] || typeof current[key] === 'string') {
+        current[key] = {};
+      }
       current = current[key];
     }
     
@@ -1440,7 +1443,7 @@ END_PROGRAM`}
 
             <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
               {/* Device Constants Section - Left Side */}
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 min-h-0 flex flex-col">
                 <div className="mb-3">
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div className="flex items-center gap-2">
@@ -1452,7 +1455,7 @@ END_PROGRAM`}
                       <div />
                     </div>
                   </div>
-                <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto h-full">
+                <div className="flex-1 bg-gray-900 rounded-lg border border-gray-800 p-4 overflow-y-auto min-h-0">
                   {/* Inputs inside the hierarchy widget */}
                   <form onSubmit={(e) => addDeviceConstant(e)} className="mb-1 flex items-center gap-2">
                     {/* Path is fixed to 'Device' for now */}
@@ -1495,7 +1498,10 @@ END_PROGRAM`}
                           
                           // Navigate through the full path
                           constant.path.forEach((pathPart) => {
-                            if (!current[pathPart]) current[pathPart] = {};
+                            // Only create object if key doesn't exist or if it's not already a string value
+                            if (!current[pathPart] || typeof current[pathPart] === 'string') {
+                              current[pathPart] = {};
+                            }
                             current = current[pathPart];
                           });
                           
