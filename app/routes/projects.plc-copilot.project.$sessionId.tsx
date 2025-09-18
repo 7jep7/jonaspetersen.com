@@ -386,8 +386,8 @@ export default function PLCCopilotProject() {
         // take subsequent lines until a blank or non-option
         for (let j = i+1; j < lines.length; j++) {
           const candidate = lines[j];
-          if (/^([A-Z]\)|\d\.|-|•)\s*/.test(candidate)) {
-            optionLines.push(candidate.replace(/^([A-Z]\)|\d\.|-|•)\s*/, '').trim());
+          if (/^([A-Z]\)|\d\.|-|\u2022)\s*/.test(candidate)) {
+            optionLines.push(candidate.replace(/^([A-Z]\)|\d\.|-|\u2022)\s*/, '').trim());
           } else if (/^[A-Z]\)\s*/.test(candidate)) {
             optionLines.push(candidate.replace(/^[A-Z]\)\s*/, '').trim());
           } else {
