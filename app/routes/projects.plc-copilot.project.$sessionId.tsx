@@ -30,6 +30,8 @@ import { Button } from "~/components/ui/button";
 // Safe ReactMarkdown wrapper with fallback for Safari compatibility
 const SafeReactMarkdown = ({ children, components, ...props }: any) => {
   try {
+    // DEBUG: Log entry into SafeReactMarkdown (module scope)
+    console.debug('DEBUG: Entered SafeReactMarkdown');
     // First try with remark-gfm
     return (
       <ReactMarkdown 
@@ -41,7 +43,7 @@ const SafeReactMarkdown = ({ children, components, ...props }: any) => {
       </ReactMarkdown>
     );
   } catch (error) {
-    console.warn('ReactMarkdown with remark-gfm failed, trying without plugins:', error);
+    console.error('DEBUG: ReactMarkdown error:', error);
     
     try {
       // Try without remark-gfm for Safari compatibility
@@ -416,6 +418,29 @@ export default function PLCCopilotProject() {
     setTerminalLogs((t) => [...t, `[${new Date().toLocaleTimeString()}] ${line}`]);
   };
 
+  // Safe stringify to avoid exceptions when serializing circular objects
+  const safeStringify = (obj: any, maxLength: number = 1200) => {
+    try {
+      const seen = new WeakSet();
+      const str = JSON.stringify(obj, function(key, value) {
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) return '[Circular]';
+          seen.add(value);
+        }
+        return value;
+      });
+      return str.length > maxLength ? str.slice(0, maxLength) + '... [truncated]' : str;
+    } catch (e) {
+      try {
+        // Fallback: attempt to coerce to string
+        const coerced = String(obj);
+        return coerced.length > maxLength ? coerced.slice(0, maxLength) + '... [truncated]' : coerced;
+      } catch (e2) {
+        return '[unserializable response]';
+      }
+    }
+  };
+
   // Return a very concise description of how the current stage modifies the prompt
   const buildPromptModifier = (stage: typeof currentStage) => {
     switch (stage) {
@@ -643,8 +668,8 @@ export default function PLCCopilotProject() {
         getPreviousCopilotMessage() // previous copilot message for context
       );
 
-  // Log brief response summary
-  logApiSummary('RECV', response.chat_message, response.updated_context);
+      // Log brief response summary
+      logApiSummary('RECV', response.chat_message, response.updated_context);
 
       // Update context from backend response
       updateContextFromResponse(response);
@@ -669,8 +694,11 @@ export default function PLCCopilotProject() {
       }
       
       // Update progress if provided
-      if (response.gathering_requirements_progress !== undefined) {
-        setStageProgress({ confidence: response.gathering_requirements_progress });
+      if (response.gathering_requirements_estimated_progress !== undefined) {
+        logTerminal(`gathering_requirements_estimated_progress: ${response.gathering_requirements_estimated_progress}`);
+        setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
+      } else {
+        logTerminal('WARNING: Backend response missing gathering_requirements_estimated_progress');
       }
       
       // Check if response contains MCQ and extract options
@@ -800,7 +828,12 @@ export default function PLCCopilotProject() {
       ? ` | PREV: ${previousCopilotMessage.replace(/\s+/g, ' ').trim().slice(0, 40)}${previousCopilotMessage.length > 40 ? '…' : ''}`
       : '';
     
-    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}${contextSummary}${prevMsgSummary}`);
+    // For RECV operations, show gathering_requirements_estimated_progress if available
+    const progressInfo = direction === 'RECV' && context?.gathering_requirements_estimated_progress !== undefined
+      ? ` | PROGRESS: ${context.gathering_requirements_estimated_progress}`
+      : '';
+    
+    logTerminal(`${direction} ${ts} ${short}${contentSnippet.length > 80 ? '…' : ''}${contextSummary}${prevMsgSummary}${progressInfo}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -892,8 +925,8 @@ export default function PLCCopilotProject() {
         }
         
         // Update progress if provided
-        if (response.gathering_requirements_progress !== undefined) {
-          setStageProgress({ confidence: response.gathering_requirements_progress });
+        if (response.gathering_requirements_estimated_progress !== undefined) {
+          setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
         }
         
         // Check if response contains MCQ and extract options
@@ -1009,8 +1042,8 @@ export default function PLCCopilotProject() {
       }
       
       // Update progress if provided
-      if (response.gathering_requirements_progress !== undefined) {
-        setStageProgress({ confidence: response.gathering_requirements_progress });
+      if (response.gathering_requirements_estimated_progress !== undefined) {
+        setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
       }
       
       // Update generated code if provided
@@ -1772,7 +1805,11 @@ END_PROGRAM`}
                     size="sm"
                     onClick={handleSkipToCode}
                     disabled={isLoading || apiCallInProgress}
-                    className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 ml-3 bg-transparent disabled:opacity-50"
+                    className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 ml-3 bg-transparent disabled:opacity-50 relative overflow-hidden"
+                    style={{
+                      backgroundImage: `linear-gradient(to right, rgba(75, 85, 99, 0.3) 0%, rgba(75, 85, 99, 0.3) ${(stageProgress?.confidence || 0) * 100}%, transparent ${(stageProgress?.confidence || 0) * 100}%, transparent 100%)`,
+                      transition: 'background-image 0.3s ease-in-out'
+                    }}
                   >
                     <SkipForward className="w-3 h-3 mr-1 text-gray-400" />
                     <span className="align-middle">Skip to Code</span>
@@ -2170,7 +2207,11 @@ END_PROGRAM`}
                         size="sm"
                         onClick={handleGenerateClick}
                         disabled={isLoading || apiCallInProgress}
-                        className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 bg-transparent disabled:opacity-50"
+                        className="border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white text-xs px-2 py-1 bg-transparent disabled:opacity-50 relative overflow-hidden"
+                        style={{
+                          backgroundImage: `linear-gradient(to right, rgba(75, 85, 99, 0.3) 0%, rgba(75, 85, 99, 0.3) ${(stageProgress?.confidence || 0) * 100}%, transparent ${(stageProgress?.confidence || 0) * 100}%, transparent 100%)`,
+                          transition: 'background-image 0.3s ease-in-out'
+                        }}
                       >
                         <SkipForward className="w-3 h-3 mr-1 text-gray-400" />
                         <span className="align-middle">Skip to Code</span>

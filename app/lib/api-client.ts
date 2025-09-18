@@ -12,7 +12,7 @@ interface ProjectContext {
 interface ContextResponse {
   updated_context: ProjectContext;
   chat_message: string;
-  gathering_requirements_progress?: number;
+  gathering_requirements_estimated_progress?: number;
   current_stage: 'gathering_requirements' | 'code_generation' | 'refinement_testing';
   is_mcq: boolean;
   is_multiselect: boolean;
