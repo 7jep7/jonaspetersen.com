@@ -494,6 +494,18 @@ export default function PLCCopilotProject() {
     if (optionLines.length >= 2) return optionLines;
     return null;
   };
+
+  // Verify session ID in API responses
+  const verifySessionId = (response: ContextResponse) => {
+    if (response.session_id && response.session_id !== sessionId) {
+      console.warn('Session ID mismatch detected', {
+        expected: sessionId,
+        received: response.session_id
+      });
+      // Could show a warning to the user or handle the mismatch
+      logTerminal(`WARNING: Session ID mismatch - expected: ${sessionId}, received: ${response.session_id}`);
+    }
+  };
   const [sidebarWidth, setSidebarWidth] = useState(25); // 25% default (1:3 ratio)
   const [filesLoaded, setFilesLoaded] = useState(false); // Track if files have been loaded from localStorage
   
@@ -665,11 +677,15 @@ export default function PLCCopilotProject() {
           const file = new File([blob], f.name, { type: f.type });
           return file;
         }) : undefined,
-        getPreviousCopilotMessage() // previous copilot message for context
+        getPreviousCopilotMessage(), // previous copilot message for context
+        sessionId // Pass session ID from URL params
       );
 
       // Log brief response summary
       logApiSummary('RECV', response.chat_message, response.updated_context);
+
+      // Verify session ID
+      verifySessionId(response);
 
       // Update context from backend response
       updateContextFromResponse(response);
@@ -897,10 +913,14 @@ export default function PLCCopilotProject() {
           undefined, // no message
           stripped, // mcqResponses
           undefined, // no files
-          getPreviousCopilotMessage() // previous copilot message for context
+          getPreviousCopilotMessage(), // previous copilot message for context
+          sessionId // Pass session ID from URL params
         );
 
         logApiSummary('RECV', response.chat_message, response.updated_context);
+
+        // Verify session ID
+        verifySessionId(response);
 
         // Update context from backend response
         updateContextFromResponse(response);
@@ -1014,10 +1034,14 @@ export default function PLCCopilotProject() {
           const file = new File([blob], f.name, { type: f.type });
           return file;
         }) : undefined,
-        getPreviousCopilotMessage() // previous copilot message for context
+        getPreviousCopilotMessage(), // previous copilot message for context
+        sessionId // Pass session ID from URL params
       );
       
       logApiSummary('RECV', response.chat_message, response.updated_context);
+
+      // Verify session ID
+      verifySessionId(response);
 
       // Update context from backend response
       updateContextFromResponse(response);
@@ -1263,13 +1287,42 @@ export default function PLCCopilotProject() {
     }
   }, [projectContext, sessionId, contextLoaded]);
 
-  // Cleanup resize event listeners on unmount
+  // Cleanup session and event listeners on unmount
   useEffect(() => {
     return () => {
+      // Cleanup session when component unmounts
+      if (sessionId) {
+        apiClient.cleanupSession([sessionId]).catch(error => {
+          console.warn('Failed to cleanup session on unmount:', error);
+        });
+      }
+      
+      // Cleanup event listeners
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []);
+  }, [sessionId]);
+
+  // Explicit session cleanup function
+  const handleEndSession = async () => {
+    if (!sessionId) return;
+    
+    try {
+      logTerminal(`Cleaning up session: ${sessionId}`);
+      const result = await apiClient.cleanupSession([sessionId]);
+      logTerminal(`Session cleanup successful: ${result.message}`);
+      
+      // Clear local storage for this session
+      localStorage.removeItem(`plc_copilot_context_${sessionId}`);
+      localStorage.removeItem('plc_copilot_uploaded_files');
+      
+      // Optionally redirect to sessions list or show success message
+      // navigate('/projects/plc-copilot/session');
+    } catch (error) {
+      console.error('Failed to cleanup session:', error);
+      logTerminal(`Session cleanup failed: ${error}`);
+    }
+  };
 
   // Download generated code function
   const downloadGeneratedCode = () => {
@@ -1777,6 +1830,17 @@ END_PROGRAM`}
                 </div>
               </div>
             </div>
+          </div>
+          
+          {/* Session Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleEndSession}
+              className="px-3 py-1 text-xs text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-500 rounded transition-colors"
+              title="End session and cleanup files"
+            >
+              End Session
+            </button>
           </div>
         </div>
       </header>

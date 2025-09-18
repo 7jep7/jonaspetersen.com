@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiClient } from '~/lib/api-client'
-import type { ProjectContext, ContextResponse } from '~/lib/api-client'
+import type { ProjectContext, ContextResponse, CleanupResponse } from '~/lib/api-client'
 
 describe('PLCCopilotApiClient', () => {
   beforeEach(() => {
@@ -34,6 +34,7 @@ describe('PLCCopilotApiClient', () => {
         information: 'Updated project information'
       },
       chat_message: 'Test response message',
+      session_id: 'test-session-id',
       current_stage: 'gathering_requirements',
       is_mcq: false,
       is_multiselect: false,
@@ -197,7 +198,7 @@ describe('PLCCopilotApiClient', () => {
 
       await expect(
         apiClient.updateContext(mockContext, 'gathering_requirements', 'Test message')
-      ).rejects.toThrow('HTTP error! status: 500')
+      ).rejects.toThrow('Server error. Please try again later.')
     })
   })
 
@@ -250,6 +251,80 @@ describe('PLCCopilotApiClient', () => {
 
       const url = await apiClient.getBaseUrl()
       expect(url).toBe('https://plc-copilot.onrender.com')
+    })
+  })
+
+  describe('cleanupSession', () => {
+    const mockCleanupResponse: CleanupResponse = {
+      message: 'Cleaned up 1 session(s): test-session-id',
+      cleaned_sessions: ['test-session-id'],
+      files_removed: 3
+    }
+
+    it('should cleanup single session', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockCleanupResponse)
+      })
+      global.fetch = mockFetch
+
+      const result = await apiClient.cleanupSession(['test-session-id'])
+      expect(result).toEqual(mockCleanupResponse)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://plc-copilot.onrender.com/api/v1/context/cleanup',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            session_ids: ['test-session-id']
+          })
+        })
+      )
+    })
+
+    it('should cleanup multiple sessions', async () => {
+      const mockMultiResponse: CleanupResponse = {
+        message: 'Cleaned up 2 session(s): session-1, session-2',
+        cleaned_sessions: ['session-1', 'session-2'],
+        files_removed: 5
+      }
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockMultiResponse)
+      })
+      global.fetch = mockFetch
+
+      const result = await apiClient.cleanupSession(['session-1', 'session-2'])
+      expect(result).toEqual(mockMultiResponse)
+    })
+
+    it('should handle cleanup errors', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500
+      })
+      global.fetch = mockFetch
+
+      await expect(
+        apiClient.cleanupSession(['test-session-id'])
+      ).rejects.toThrow('Cleanup failed: 500')
+    })
+  })
+
+  describe('session management', () => {
+    it('should generate session IDs', () => {
+      const sessionId = apiClient.getSessionId()
+      expect(sessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+    })
+
+    it('should generate new session IDs', () => {
+      const sessionId1 = apiClient.getSessionId()
+      const sessionId2 = apiClient.generateNewSession()
+      expect(sessionId1).not.toBe(sessionId2)
+      expect(sessionId2).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
     })
   })
 })
