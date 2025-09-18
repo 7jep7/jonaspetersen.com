@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 
@@ -31,6 +31,32 @@ export function MCQComponent({
     }
   };
 
+  // Handle Enter key submission
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && selectedOption && !disabled && !isLoading) {
+        event.preventDefault();
+        handleSubmit();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedOption, disabled, isLoading]);
+
+  const handleOptionKeyDown = (event: React.KeyboardEvent, option: string) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleOptionSelect(option);
+      // If this is Enter and we just selected an option, submit immediately
+      if (event.key === 'Enter' && !selectedOption) {
+        setTimeout(() => handleSubmit(), 0);
+      }
+    }
+  };
+
   return (
     <Card className="p-6 border-2 border-blue-200 bg-blue-50/50">
       <div className="space-y-4">
@@ -50,6 +76,7 @@ export function MCQComponent({
             <button
               key={index}
               onClick={() => handleOptionSelect(option)}
+              onKeyDown={(e) => handleOptionKeyDown(e, option)}
               disabled={disabled || isLoading}
               className={`
                 w-full text-left p-4 rounded-lg border-2 transition-all duration-200
@@ -90,6 +117,12 @@ export function MCQComponent({
         <div className="pt-4">
           <Button
             onClick={handleSubmit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
             disabled={!selectedOption || disabled || isLoading}
             className="w-full"
           >
