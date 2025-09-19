@@ -2,7 +2,7 @@
 // Supports both localhost (development) and production (render.com) endpoints
 
 // Testing mode - set to false to use production backend (CORS now fixed)
-const ENABLE_LOCALHOST_TESTING = true;
+const ENABLE_LOCALHOST_TESTING = false;
 
 interface ProjectContext {
   device_constants: Record<string, any>;

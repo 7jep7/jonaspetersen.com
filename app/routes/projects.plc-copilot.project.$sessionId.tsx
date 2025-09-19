@@ -101,6 +101,7 @@ interface UploadedFile {
   size: number;
   type: string;
   content?: string | null;
+  isBase64?: boolean; // Flag to indicate if content is base64 encoded
 }
 
 // Helper functions to convert between UI format and API format
@@ -672,8 +673,28 @@ export default function PLCCopilotProject() {
           if (!f.content) {
             console.warn('File content missing for:', f.name, '- file will be empty');
           }
-          const blob = new Blob([f.content || ''], { type: f.type });
+          
+          let blob: Blob;
+          if (f.isBase64 && f.content) {
+            // Decode base64 content for binary files
+            try {
+              const binaryString = atob(f.content);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              blob = new Blob([bytes], { type: f.type });
+            } catch (error) {
+              console.error('Failed to decode base64 for file:', f.name, error);
+              blob = new Blob([''], { type: f.type });
+            }
+          } else {
+            // Text content or no content
+            blob = new Blob([f.content || ''], { type: f.type });
+          }
+          
           const file = new File([blob], f.name, { type: f.type });
+          console.log('Created File object:', f.name, 'size:', file.size, 'type:', file.type);
           return file;
         }).filter(f => f.size > 0) : undefined, // Filter out empty files
         getPreviousCopilotMessage(), // previous copilot message for context
@@ -1036,8 +1057,28 @@ export default function PLCCopilotProject() {
           if (!f.content) {
             console.warn('File content missing for:', f.name, '- file will be empty');
           }
-          const blob = new Blob([f.content || ''], { type: f.type });
+          
+          let blob: Blob;
+          if (f.isBase64 && f.content) {
+            // Decode base64 content for binary files
+            try {
+              const binaryString = atob(f.content);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              blob = new Blob([bytes], { type: f.type });
+            } catch (error) {
+              console.error('Failed to decode base64 for file:', f.name, error);
+              blob = new Blob([''], { type: f.type });
+            }
+          } else {
+            // Text content or no content
+            blob = new Blob([f.content || ''], { type: f.type });
+          }
+          
           const file = new File([blob], f.name, { type: f.type });
+          console.log('Created File object:', f.name, 'size:', file.size, 'type:', file.type);
           return file;
         }).filter(f => f.size > 0) : undefined, // Filter out empty files
         getPreviousCopilotMessage(), // previous copilot message for context
