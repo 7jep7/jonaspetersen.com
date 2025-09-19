@@ -53,21 +53,35 @@ export default function PLCCopilotIndex() {
     }
   }, []);
 
-  // Persist uploadedFiles to localStorage (excluding content to avoid quota issues)
+  // Persist uploadedFiles to localStorage (including content for API calls)
   useEffect(() => {
     try {
-      // Only save file metadata (name, type, size, id) not content
-      const filesMetadata = uploadedFiles.map(file => ({
+      // Save complete file data including content for API calls
+      const filesData = uploadedFiles.map(file => ({
         id: file.id,
         name: file.name,
         size: file.size,
-        type: file.type
-        // Exclude content to prevent localStorage quota exceeded error
+        type: file.type,
+        content: file.content // Include content for API calls
       }));
-      console.log('Index page: Saving files metadata to localStorage:', filesMetadata);
-      localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(filesMetadata));
+      console.log('Index page: Saving files data to localStorage:', filesData.map(f => ({ name: f.name, hasContent: !!f.content })));
+      localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(filesData));
     } catch (e) {
-      console.error('Index page: Failed to save files to localStorage:', e);
+      console.error('Index page: Failed to save files to localStorage (quota exceeded?):', e);
+      // Fallback: Save without content if quota exceeded
+      try {
+        const filesMetadata = uploadedFiles.map(file => ({
+          id: file.id,
+          name: file.name,
+          size: file.size,
+          type: file.type
+          // No content to avoid quota issues
+        }));
+        localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(filesMetadata));
+        console.warn('Index page: Saved files without content due to quota limits');
+      } catch (fallbackError) {
+        console.error('Index page: Failed to save even file metadata:', fallbackError);
+      }
     }
   }, [uploadedFiles]);
 

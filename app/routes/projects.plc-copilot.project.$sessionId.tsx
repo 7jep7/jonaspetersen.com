@@ -639,11 +639,7 @@ export default function PLCCopilotProject() {
       };
       setMessages([initialMessage]);
       
-      // Clear uploaded files state AND localStorage after creating initial message
-      setUploadedFiles([]);
-      localStorage.removeItem('plc_copilot_uploaded_files');
-      
-      // Trigger API call for initial prompt
+      // Trigger API call for initial prompt (with files)
       sendMessage(initialMessage);
     }
   }, [initialPrompt, initialApiCall, messages.length, filesLoaded, uploadedFiles]);
@@ -673,10 +669,13 @@ export default function PLCCopilotProject() {
         undefined, // mcqResponses
         uploadedFiles.length > 0 ? uploadedFiles.map(f => {
           // Convert UploadedFile to File object for API
+          if (!f.content) {
+            console.warn('File content missing for:', f.name, '- file will be empty');
+          }
           const blob = new Blob([f.content || ''], { type: f.type });
           const file = new File([blob], f.name, { type: f.type });
           return file;
-        }) : undefined,
+        }).filter(f => f.size > 0) : undefined, // Filter out empty files
         getPreviousCopilotMessage(), // previous copilot message for context
         sessionId // Pass session ID from URL params
       );
@@ -749,6 +748,12 @@ export default function PLCCopilotProject() {
       setIsLoading(false);
       setApiCallInProgress(false);
       apiCallInProgressRef.current = false;
+      
+      // Clear uploaded files after successful API call (for initial messages with files)
+      if (uploadedFiles.length > 0) {
+        setUploadedFiles([]);
+        localStorage.removeItem('plc_copilot_uploaded_files');
+      }
     }
   };
 
@@ -1002,8 +1007,6 @@ export default function PLCCopilotProject() {
     // Add only the typed message to the UI
     setMessages(prev => [...prev, userMessage]);
     setInput("");
-    setUploadedFiles([]);
-    localStorage.removeItem('plc_copilot_uploaded_files');
 
     // Log MCQ selections if present (they will be sent to the backend but not shown in the UI)
     if (allSelectedOptions.length > 0) {
@@ -1030,10 +1033,13 @@ export default function PLCCopilotProject() {
         stripped.length > 0 ? stripped : undefined, // mcqResponses
         uploadedFiles.length > 0 ? uploadedFiles.map(f => {
           // Convert UploadedFile to File object for API
+          if (!f.content) {
+            console.warn('File content missing for:', f.name, '- file will be empty');
+          }
           const blob = new Blob([f.content || ''], { type: f.type });
           const file = new File([blob], f.name, { type: f.type });
           return file;
-        }) : undefined,
+        }).filter(f => f.size > 0) : undefined, // Filter out empty files
         getPreviousCopilotMessage(), // previous copilot message for context
         sessionId // Pass session ID from URL params
       );
@@ -1102,6 +1108,12 @@ export default function PLCCopilotProject() {
     } finally {
       setIsLoading(false);
       setApiCallInProgress(false);
+      
+      // Clear uploaded files after API call completes
+      if (uploadedFiles.length > 0) {
+        setUploadedFiles([]);
+        localStorage.removeItem('plc_copilot_uploaded_files');
+      }
     }
   };
 
