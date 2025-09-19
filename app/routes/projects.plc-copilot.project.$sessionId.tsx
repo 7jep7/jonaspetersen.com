@@ -1239,9 +1239,32 @@ export default function PLCCopilotProject() {
     Array.from(files).forEach(async (file) => {
       const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       let content: string | null = null;
+      let isBase64 = false;
+      
       try {
-        content = await file.text();
+        // Check if file is likely text-based (same logic as index page)
+        const isTextFile = file.type.startsWith('text/') || 
+                          file.type === 'application/json' ||
+                          file.type === 'application/xml' ||
+                          file.name.endsWith('.txt') ||
+                          file.name.endsWith('.csv') ||
+                          file.name.endsWith('.json') ||
+                          file.name.endsWith('.xml') ||
+                          file.name.endsWith('.plc') ||
+                          file.name.endsWith('.l5x');
+        
+        if (isTextFile) {
+          // Text file - read as text
+          content = await file.text();
+        } else {
+          // Binary file - encode as base64
+          const arrayBuffer = await file.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
+          content = btoa(String.fromCharCode(...uint8Array));
+          isBase64 = true;
+        }
       } catch (err) {
+        console.error('Failed to read file:', file.name, err);
         content = null;
       }
 
@@ -1250,7 +1273,8 @@ export default function PLCCopilotProject() {
         name: file.name,
         size: file.size,
         type: file.type,
-        content
+        content,
+        isBase64
       };
 
       setUploadedFiles(prev => {
@@ -1258,7 +1282,10 @@ export default function PLCCopilotProject() {
         return next;
       });
 
-      setSelectedFileId(id);
+      // Only auto-select text files for editing, not binary files
+      if (!isBase64) {
+        setSelectedFileId(id);
+      }
     });
 
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -2748,19 +2775,34 @@ export default function PLCCopilotProject() {
 
                     <div className="relative">
                       <textarea
-                        value={selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? input) : input}
+                        value={selectedFileId ? (() => {
+                          const selectedFile = uploadedFiles.find(f => f.id === selectedFileId);
+                          // Don't show content for binary files (base64 encoded)
+                          if (selectedFile?.isBase64) {
+                            return `[Binary file: ${selectedFile.name}]\nThis file contains binary data and cannot be edited as text.`;
+                          }
+                          return selectedFile?.content ?? input;
+                        })() : input}
                         onChange={(e) => {
                           const val = e.target.value;
                           if (selectedFileId) {
-                            setUploadedFiles(prev => prev.map(f => f.id === selectedFileId ? { ...f, content: val } : f));
+                            const selectedFile = uploadedFiles.find(f => f.id === selectedFileId);
+                            // Don't allow editing binary files
+                            if (!selectedFile?.isBase64) {
+                              setUploadedFiles(prev => prev.map(f => f.id === selectedFileId ? { ...f, content: val } : f));
+                            }
                           } else {
                             setInput(val);
                           }
                         }}
                         onKeyDown={handleKeyDownMobile}
-                        placeholder={selectedFileId ? "Edit file content..." : "Your thoughts..."}
-                        className={`w-full bg-gray-800 border border-gray-700 ${selectedFileId ? 'rounded-b-lg rounded-t-none' : 'rounded-lg'} px-4 py-3 ${selectedFileId ? 'pr-12' : 'pr-24'} resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400`}
+                        placeholder={selectedFileId ? (() => {
+                          const selectedFile = uploadedFiles.find(f => f.id === selectedFileId);
+                          return selectedFile?.isBase64 ? "Binary file - cannot edit" : "Edit file content...";
+                        })() : "Your thoughts..."}
+                        className={`w-full bg-gray-800 border border-gray-700 ${selectedFileId ? 'rounded-b-lg rounded-t-none' : 'rounded-lg'} px-4 py-3 ${selectedFileId ? 'pr-12' : 'pr-24'} resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400 ${selectedFileId && uploadedFiles.find(f => f.id === selectedFileId)?.isBase64 ? 'bg-gray-900 cursor-not-allowed' : ''}`}
                         rows={selectedFileId ? 8 : 2}
+                        readOnly={selectedFileId ? uploadedFiles.find(f => f.id === selectedFileId)?.isBase64 : false}
                       />
                       {/* File upload button - only show when not editing a file, match index page positioning */}
                       {!selectedFileId && (
