@@ -101,27 +101,17 @@ interface UploadedFile {
   size: number;
   type: string;
   content?: string | null;
+  isBase64?: boolean; // Flag to indicate if content is base64 encoded
 }
 
 // Helper functions to convert between UI format and API format
 const convertDeviceConstantsToApiFormat = (deviceConstants: DeviceConstant[]): Record<string, any> => {
   const result: Record<string, any> = {};
   deviceConstants.forEach(constant => {
+    // Create dot notation key from path and name
     const fullPath = [...constant.path, constant.name];
-    let current = result;
-    
-    // Navigate to the right location in the nested object
-    for (let i = 0; i < fullPath.length - 1; i++) {
-      const key = fullPath[i];
-      // Only create object if key doesn't exist or if it's not already a string value
-      if (!current[key] || typeof current[key] === 'string') {
-        current[key] = {};
-      }
-      current = current[key];
-    }
-    
-    // Set the final value
-    current[fullPath[fullPath.length - 1]] = constant.value;
+    const dotNotationKey = fullPath.join('.');
+    result[dotNotationKey] = constant.value;
   });
   return result;
 };
@@ -129,23 +119,32 @@ const convertDeviceConstantsToApiFormat = (deviceConstants: DeviceConstant[]): R
 const convertApiFormatToDeviceConstants = (device_constants: Record<string, any>): DeviceConstant[] => {
   const result: DeviceConstant[] = [];
   
-  const traverse = (obj: any, currentPath: string[] = []) => {
-    Object.entries(obj).forEach(([key, value]) => {
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        traverse(value, [...currentPath, key]);
-      } else {
-        result.push({
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          path: currentPath,
-          name: key,
-          value: String(value),
-          source: 'api'
-        });
-      }
+  Object.entries(device_constants).forEach(([key, value]) => {
+    // Parse dot notation keys (e.g., "Device.Interface.Type" -> path: ["Device", "Interface"], name: "Type")
+    const keyParts = key.split('.').map(p => p.trim()).filter(Boolean);
+    
+    let path: string[];
+    let name: string;
+    
+    if (keyParts.length > 1) {
+      // Multi-level: last part is name, rest is path
+      path = keyParts.slice(0, -1);
+      name = keyParts[keyParts.length - 1];
+    } else {
+      // Single level: no path, key is the name
+      path = [];
+      name = key;
+    }
+    
+    result.push({
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      path,
+      name,
+      value: String(value),
+      source: 'api'
     });
-  };
+  });
   
-  traverse(device_constants);
   return result;
 };
 
@@ -201,6 +200,8 @@ export default function PLCCopilotProject() {
   const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
   const [generatedCode, setGeneratedCode] = useState<string>('');
   const [generateWarning, setGenerateWarning] = useState<string | null>(null);
+  // Track when we've reached code generation to prevent further automatic stage transitions
+  const [hasReachedCodeGeneration, setHasReachedCodeGeneration] = useState<boolean>(false);
 
   const [activeView, setActiveView] = useState<OutputView>(() => {
     // Determine initial view while respecting mobile UX:
@@ -311,7 +312,7 @@ export default function PLCCopilotProject() {
   const [editConstantValue, setEditConstantValue] = useState<string>("");
 
   // Placeholder text for Information field that gets cleared before API calls
-  const informationPlaceholder = "No device constants gathered yet. Information will be extracted from datasheets and conversations.";
+  const informationPlaceholder = "Project context and requirements will be gathered from conversations and uploaded files.";
 
   // Helper function to clean context before API calls (removes placeholder text)
   const getCleanedProjectContext = () => {
@@ -639,11 +640,7 @@ export default function PLCCopilotProject() {
       };
       setMessages([initialMessage]);
       
-      // Clear uploaded files state AND localStorage after creating initial message
-      setUploadedFiles([]);
-      localStorage.removeItem('plc_copilot_uploaded_files');
-      
-      // Trigger API call for initial prompt
+      // Trigger API call for initial prompt (with files)
       sendMessage(initialMessage);
     }
   }, [initialPrompt, initialApiCall, messages.length, filesLoaded, uploadedFiles]);
@@ -653,6 +650,15 @@ export default function PLCCopilotProject() {
     if (apiCallInProgressRef.current) {
       console.log('API call already in progress, skipping');
       return;
+    }
+
+    // Capture files before clearing UI state
+    const filesToSend = [...uploadedFiles];
+    
+    // Clear uploaded files immediately when sending message
+    if (uploadedFiles.length > 0) {
+      setUploadedFiles([]);
+      localStorage.removeItem('plc_copilot_uploaded_files');
     }
 
     apiCallInProgressRef.current = true;
@@ -671,12 +677,35 @@ export default function PLCCopilotProject() {
         convertStageToApiFormat(currentStage),
         userMessage.content,
         undefined, // mcqResponses
-        uploadedFiles.length > 0 ? uploadedFiles.map(f => {
+        filesToSend.length > 0 ? filesToSend.map(f => {
           // Convert UploadedFile to File object for API
-          const blob = new Blob([f.content || ''], { type: f.type });
+          if (!f.content) {
+            console.warn('File content missing for:', f.name, '- file will be empty');
+          }
+          
+          let blob: Blob;
+          if (f.isBase64 && f.content) {
+            // Decode base64 content for binary files
+            try {
+              const binaryString = atob(f.content);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              blob = new Blob([bytes], { type: f.type });
+            } catch (error) {
+              console.error('Failed to decode base64 for file:', f.name, error);
+              blob = new Blob([''], { type: f.type });
+            }
+          } else {
+            // Text content or no content
+            blob = new Blob([f.content || ''], { type: f.type });
+          }
+          
           const file = new File([blob], f.name, { type: f.type });
+          console.log('Created File object:', f.name, 'size:', file.size, 'type:', file.type);
           return file;
-        }) : undefined,
+        }).filter(f => f.size > 0) : undefined, // Filter out empty files
         getPreviousCopilotMessage(), // previous copilot message for context
         sessionId // Pass session ID from URL params
       );
@@ -696,7 +725,7 @@ export default function PLCCopilotProject() {
         deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
       }));
       
-      // Update stage if changed
+      // Update stage if changed - but only if we haven't reached code generation yet
       // Map API stage names to UI stage names for comparison
       const stageMapping: Record<string, typeof currentStage> = {
         'gathering_requirements': 'gather_requirements',
@@ -705,8 +734,17 @@ export default function PLCCopilotProject() {
       };
       const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
       
-      if (mappedStage !== currentStage) {
+      // Only allow backend-driven stage transitions if we haven't reached code generation yet
+      if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
         handleStageTransition(mappedStage, 'Backend updated stage');
+      }
+      
+      // Special case: transition to refinement_testing when backend returns generated code for the first time
+      // But only if we're currently in code_generation stage
+      if (response.generated_code && response.generated_code.trim() !== '') {
+        if (currentStage === 'code_generation') {
+          handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+        }
       }
       
       // Update progress if provided
@@ -749,6 +787,8 @@ export default function PLCCopilotProject() {
       setIsLoading(false);
       setApiCallInProgress(false);
       apiCallInProgressRef.current = false;
+      
+      // Files are already cleared immediately when message is sent
     }
   };
 
@@ -881,16 +921,19 @@ export default function PLCCopilotProject() {
       }
     }
     
-    // Require either text input or MCQ selections
-    if (!input.trim() && allSelectedOptions.length === 0) {
+    // Require either text input, MCQ selections, or uploaded files
+    if (!input.trim() && allSelectedOptions.length === 0 && uploadedFiles.length === 0) {
       return;
     }
     
     if (isLoading) return;
 
     // Handle MCQ-only submissions (no user message created)
-  if (!input.trim() && allSelectedOptions.length > 0) {
-      // Clear inputs but keep MCQ selections visible
+    if (!input.trim() && allSelectedOptions.length > 0 && uploadedFiles.length === 0) {
+      // Capture files before clearing UI state
+      const filesToSend = [...uploadedFiles];
+      
+      // Clear inputs immediately
       setInput("");
       setUploadedFiles([]);
       localStorage.removeItem('plc_copilot_uploaded_files');
@@ -912,7 +955,7 @@ export default function PLCCopilotProject() {
           convertStageToApiFormat(currentStage),
           undefined, // no message
           stripped, // mcqResponses
-          undefined, // no files
+          undefined, // no files for MCQ-only submissions
           getPreviousCopilotMessage(), // previous copilot message for context
           sessionId // Pass session ID from URL params
         );
@@ -931,7 +974,7 @@ export default function PLCCopilotProject() {
           deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
         }));
         
-        // Update stage if changed
+        // Update stage if changed - but only if we haven't reached code generation yet
         // Map API stage names to UI stage names for comparison
         const stageMapping: Record<string, typeof currentStage> = {
           'gathering_requirements': 'gather_requirements',
@@ -940,8 +983,17 @@ export default function PLCCopilotProject() {
         };
         const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
         
-        if (mappedStage !== currentStage) {
+        // Only allow backend-driven stage transitions if we haven't reached code generation yet
+        if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
           handleStageTransition(mappedStage, 'Backend updated stage');
+        }
+        
+        // Special case: transition to refinement_testing when backend returns generated code for the first time
+        // But only if we're currently in code_generation stage
+        if (response.generated_code && response.generated_code.trim() !== '') {
+          if (currentStage === 'code_generation') {
+            handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+          }
         }
         
         // Update progress if provided
@@ -990,16 +1042,19 @@ export default function PLCCopilotProject() {
     // as additional context but don't duplicate them in the visible user message.
     const visibleContent = input.trim();
 
+    // Capture files before clearing UI state
+    const filesToSend = [...uploadedFiles];
+
     const userMessage: Message = {
       id: Date.now().toString(),
       content: visibleContent,
       role: "user",
       timestamp: new Date(),
-      hasFiles: uploadedFiles.length > 0,
-      attachedFiles: uploadedFiles.map(f => ({ name: f.name, type: f.type }))
+      hasFiles: filesToSend.length > 0,
+      attachedFiles: filesToSend.map(f => ({ name: f.name, type: f.type }))
     };
 
-    // Add only the typed message to the UI
+    // Add only the typed message to the UI and clear inputs immediately
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setUploadedFiles([]);
@@ -1028,12 +1083,35 @@ export default function PLCCopilotProject() {
         convertStageToApiFormat(currentStage),
         visibleContent,
         stripped.length > 0 ? stripped : undefined, // mcqResponses
-        uploadedFiles.length > 0 ? uploadedFiles.map(f => {
+        filesToSend.length > 0 ? filesToSend.map(f => {
           // Convert UploadedFile to File object for API
-          const blob = new Blob([f.content || ''], { type: f.type });
+          if (!f.content) {
+            console.warn('File content missing for:', f.name, '- file will be empty');
+          }
+          
+          let blob: Blob;
+          if (f.isBase64 && f.content) {
+            // Decode base64 content for binary files
+            try {
+              const binaryString = atob(f.content);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              blob = new Blob([bytes], { type: f.type });
+            } catch (error) {
+              console.error('Failed to decode base64 for file:', f.name, error);
+              blob = new Blob([''], { type: f.type });
+            }
+          } else {
+            // Text content or no content
+            blob = new Blob([f.content || ''], { type: f.type });
+          }
+          
           const file = new File([blob], f.name, { type: f.type });
+          console.log('Created File object:', f.name, 'size:', file.size, 'type:', file.type);
           return file;
-        }) : undefined,
+        }).filter(f => f.size > 0) : undefined, // Filter out empty files
         getPreviousCopilotMessage(), // previous copilot message for context
         sessionId // Pass session ID from URL params
       );
@@ -1052,7 +1130,7 @@ export default function PLCCopilotProject() {
         deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
       }));
       
-      // Update stage if changed
+      // Update stage if changed - but only if we haven't reached code generation yet
       // Map API stage names to UI stage names for comparison
       const stageMapping: Record<string, typeof currentStage> = {
         'gathering_requirements': 'gather_requirements',
@@ -1061,8 +1139,17 @@ export default function PLCCopilotProject() {
       };
       const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
       
-      if (mappedStage !== currentStage) {
+      // Only allow backend-driven stage transitions if we haven't reached code generation yet
+      if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
         handleStageTransition(mappedStage, 'Backend updated stage');
+      }
+      
+      // Special case: transition to refinement_testing when backend returns generated code for the first time
+      // But only if we're currently in code_generation stage
+      if (response.generated_code && response.generated_code.trim() !== '') {
+        if (currentStage === 'code_generation') {
+          handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+        }
       }
       
       // Update progress if provided
@@ -1102,6 +1189,8 @@ export default function PLCCopilotProject() {
     } finally {
       setIsLoading(false);
       setApiCallInProgress(false);
+      
+      // Files are already cleared immediately upon submission
     }
   };
 
@@ -1150,9 +1239,48 @@ export default function PLCCopilotProject() {
     Array.from(files).forEach(async (file) => {
       const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       let content: string | null = null;
+      let isBase64 = false;
+      
       try {
-        content = await file.text();
+        // Check if file is likely text-based (same logic as index page)
+        const isTextFile = file.type.startsWith('text/') || 
+                          file.type === 'application/json' ||
+                          file.type === 'application/xml' ||
+                          file.name.endsWith('.txt') ||
+                          file.name.endsWith('.csv') ||
+                          file.name.endsWith('.json') ||
+                          file.name.endsWith('.xml') ||
+                          file.name.endsWith('.plc') ||
+                          file.name.endsWith('.l5x');
+        
+        if (isTextFile) {
+          // Text file - read as text
+          content = await file.text();
+        } else {
+          // Binary file - encode as base64 using FileReader to avoid stack overflow for large files
+          content = await new Promise<string | null>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              try {
+                const result = reader.result as string;
+                // result is like "data:application/pdf;base64,JVBERi0x..."
+                const base64 = result.split(',')[1] ?? null;
+                resolve(base64);
+              } catch (e) {
+                console.error('Failed to convert file to base64 via FileReader:', file.name, e);
+                resolve(null);
+              }
+            };
+            reader.onerror = (e) => {
+              console.error('FileReader error reading file:', file.name, e);
+              resolve(null);
+            };
+            reader.readAsDataURL(file);
+          });
+          isBase64 = true;
+        }
       } catch (err) {
+        console.error('Failed to read file:', file.name, err);
         content = null;
       }
 
@@ -1161,7 +1289,8 @@ export default function PLCCopilotProject() {
         name: file.name,
         size: file.size,
         type: file.type,
-        content
+        content,
+        isBase64
       };
 
       setUploadedFiles(prev => {
@@ -1169,7 +1298,10 @@ export default function PLCCopilotProject() {
         return next;
       });
 
-      setSelectedFileId(id);
+      // Only auto-select text files for editing, not binary files
+      if (!isBase64) {
+        setSelectedFileId(id);
+      }
     });
 
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1181,10 +1313,15 @@ export default function PLCCopilotProject() {
     logTerminal(`STAGE: ${currentStage} -> ${newStage}${reason ? ` (${reason})` : ''}`);
     setCurrentStage(newStage);
     
-    // Auto-switch to Structured Text view when entering code generation stage
-    if (newStage === 'code_generation' && activeView !== 'structured-text') {
+    // Set flag when reaching code generation stage
+    if (newStage === 'code_generation' || newStage === 'refinement_testing') {
+      setHasReachedCodeGeneration(true);
+    }
+    
+    // Auto-switch to Structured Text view when entering code generation or refinement testing stage
+    if ((newStage === 'code_generation' || newStage === 'refinement_testing') && activeView !== 'structured-text') {
       setActiveView('structured-text');
-      logTerminal(`AUTO-SWITCH: View changed to Structured Text for code generation stage`);
+      logTerminal(`AUTO-SWITCH: View changed to Structured Text for ${newStage} stage`);
     }
     
     // Here you could add API calls to update the backend stage
@@ -1213,9 +1350,11 @@ export default function PLCCopilotProject() {
     }
   }, [currentStage]);
 
-  // Handle skip to code button - sends a message and transitions stage
+  // Handle skip to code button - sends a message and waits for backend to transition stage
   const handleSkipToCode = async () => {
     if (isLoading || apiCallInProgress) return; // Prevent if already processing
+    // Do NOT transition immediately. Wait for backend response to determine stage and
+    // switch to Structured Text only after the backend returns generated code.
     
     const skipMessage: Message = {
       id: Date.now().toString(),
@@ -1227,9 +1366,6 @@ export default function PLCCopilotProject() {
 
     // Add the message to UI first
     setMessages(prev => [...prev, skipMessage]);
-    
-    // Transition to code generation stage
-    handleStageTransition('code_generation', 'User clicked Skip to Code button');
     
     // Send the message to get LLM response
     await sendMessage(skipMessage);
@@ -1303,83 +1439,10 @@ export default function PLCCopilotProject() {
     };
   }, [sessionId]);
 
-  // Explicit session cleanup function
-  const handleEndSession = async () => {
-    if (!sessionId) return;
-    
-    try {
-      logTerminal(`Cleaning up session: ${sessionId}`);
-      const result = await apiClient.cleanupSession([sessionId]);
-      logTerminal(`Session cleanup successful: ${result.message}`);
-      
-      // Clear local storage for this session
-      localStorage.removeItem(`plc_copilot_context_${sessionId}`);
-      localStorage.removeItem('plc_copilot_uploaded_files');
-      
-      // Optionally redirect to sessions list or show success message
-      // navigate('/projects/plc-copilot/session');
-    } catch (error) {
-      console.error('Failed to cleanup session:', error);
-      logTerminal(`Session cleanup failed: ${error}`);
-    }
-  };
-
   // Download generated code function
   const downloadGeneratedCode = () => {
     // Get the current content from the textarea (either generatedCode or placeholder)
-    const content = generatedCode || `// No code generated yet
-// PLC Copilot will generate Structured Text code here
-// based on your requirements and device context.
-
-// Example placeholder:
-PROGRAM ConveyorControl
-VAR
-    bStart          : BOOL := FALSE;      // Start button
-    bStop           : BOOL := FALSE;      // Stop button  
-    bEmergencyStop  : BOOL := FALSE;      // E-stop
-    bMotorRunning   : BOOL := FALSE;      // Motor status
-    bSafetyOK       : BOOL := TRUE;       // Safety check
-    
-    // Inputs
-    bStartButton    : BOOL;
-    bStopButton     : BOOL;
-    bEStop          : BOOL;
-    bSafetyGate     : BOOL;
-    
-    // Outputs
-    qMotorContactor : BOOL;
-    qStatusLight    : BOOL;
-END_VAR
-
-// Main control logic
-IF bEStop OR NOT bSafetyGate THEN
-    bSafetyOK := FALSE;
-    qMotorContactor := FALSE;
-    bMotorRunning := FALSE;
-ELSE
-    bSafetyOK := TRUE;
-END_IF;
-
-// Start/Stop logic
-IF bStartButton AND bSafetyOK AND NOT bMotorRunning THEN
-    bStart := TRUE;
-ELSIF bStopButton OR NOT bSafetyOK THEN
-    bStart := FALSE;
-END_IF;
-
-// Motor control
-IF bStart AND bSafetyOK THEN
-    qMotorContactor := TRUE;
-    bMotorRunning := TRUE;
-ELSE
-    qMotorContactor := FALSE;
-    bMotorRunning := FALSE;
-END_IF;
-
-// Status indication
-qStatusLight := bMotorRunning;
-
-END_PROGRAM`;
+    const content = generatedCode || `// Generated code will appear here`;
     
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -1422,59 +1485,7 @@ END_PROGRAM`;
               {/* BACKGROUND_CONTAINER */}
               <div className="h-full bg-gray-900 rounded-lg p-6">
                 <textarea
-                    value={generatedCode || `// No code generated yet
-// PLC Copilot will generate Structured Text code here
-// based on your requirements and device context.
-
-// Example placeholder:
-PROGRAM ConveyorControl
-VAR
-    bStart          : BOOL := FALSE;      // Start button
-    bStop           : BOOL := FALSE;      // Stop button  
-    bEmergencyStop  : BOOL := FALSE;      // E-stop
-    bMotorRunning   : BOOL := FALSE;      // Motor status
-    bSafetyOK       : BOOL := TRUE;       // Safety check
-    
-    // Inputs
-    bStartButton    : BOOL;
-    bStopButton     : BOOL;
-    bEStop          : BOOL;
-    bSafetyGate     : BOOL;
-    
-    // Outputs
-    qMotorContactor : BOOL;
-    qStatusLight    : BOOL;
-END_VAR
-
-// Main control logic
-IF bEStop OR NOT bSafetyGate THEN
-    bSafetyOK := FALSE;
-    qMotorContactor := FALSE;
-    bMotorRunning := FALSE;
-ELSE
-    bSafetyOK := TRUE;
-END_IF;
-
-// Start/Stop logic
-IF bStartButton AND bSafetyOK AND NOT bMotorRunning THEN
-    bStart := TRUE;
-ELSIF bStopButton OR NOT bSafetyOK THEN
-    bStart := FALSE;
-END_IF;
-
-// Motor control
-IF bStart AND bSafetyOK THEN
-    qMotorContactor := TRUE;
-    bMotorRunning := TRUE;
-ELSE
-    qMotorContactor := FALSE;
-    bMotorRunning := FALSE;
-END_IF;
-
-// Status indication
-qStatusLight := bMotorRunning;
-
-END_PROGRAM`}
+                    value={generatedCode || `// Generated code will appear here`}
                     onChange={(e) => setGeneratedCode(e.target.value)}
                     className="w-full h-full resize-none bg-transparent text-gray-200 whitespace-pre font-mono text-sm border-none outline-none"
                     spellCheck={false}
@@ -1573,7 +1584,7 @@ END_PROGRAM`}
                   <div className="text-xs text-gray-500">Use dot notation in name field for hierarchy, e.g. <span className="font-mono">Device.Interface.Type</span></div>
 
                   {projectContext.deviceConstants.length === 0 ? (
-                    <div className="text-gray-500 text-sm mt-3">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
+                    <div className="text-gray-500 text-sm mt-3">No device constants found yet. They will be extracted from datasheets and conversations.</div>
                   ) : (
                     <div className="space-y-2">
                       {(() => {
@@ -1717,7 +1728,7 @@ END_PROGRAM`}
                       onClick={() => setIsInformationFocused(true)}
                     >
                       {informationInput.trim() === '' || informationInput === informationPlaceholder ? (
-                        <div className="text-gray-500 text-sm italic">{informationPlaceholder}</div>
+                        <div className="text-gray-500 text-sm">{informationPlaceholder}</div>
                       ) : (
                         <div className="prose prose-invert prose-sm max-w-none">
                           <SafeReactMarkdown
@@ -1832,16 +1843,6 @@ END_PROGRAM`}
             </div>
           </div>
           
-          {/* Session Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleEndSession}
-              className="px-3 py-1 text-xs text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-500 rounded transition-colors"
-              title="End session and cleanup files"
-            >
-              End Session
-            </button>
-          </div>
         </div>
       </header>
 
@@ -1908,7 +1909,11 @@ END_PROGRAM`}
                   <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                     {message.role === "user" ? (
                       <div className="max-w-[85%] rounded-lg px-4 py-3 bg-orange-500 text-white">
-                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        {message.content ? (
+                          <p className="whitespace-pre-wrap">{message.content}</p>
+                        ) : message.hasFiles ? (
+                          <p className="text-sm italic opacity-80">Files uploaded</p>
+                        ) : null}
                         <time className="text-xs opacity-70 mt-1 block">
                           {message.timestamp.toLocaleTimeString()}
                         </time>
@@ -1997,7 +2002,7 @@ END_PROGRAM`}
                               <button
                                 key={optionIndex}
                                 disabled={!isInteractive}
-                                onClick={() => {
+                                onClick={async () => {
                                   if (!isInteractive) return;
                                   
                                   const currentSelections = selectedMcqOptions[message.id] || [];
@@ -2021,6 +2026,117 @@ END_PROGRAM`}
                                   }));
                                   
                                   logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
+                                  
+                                  // For single choice MCQs, automatically submit when an option is selected
+                                  if (!message.isMultiSelect && newSelections.length > 0) {
+                                    // Use a short delay to allow UI to update first
+                                    setTimeout(async () => {
+                                      if (isLoading || apiCallInProgress) return;
+                                      
+                                      // Capture files before clearing UI state
+                                      const filesToSend = [...uploadedFiles];
+                                      
+                                      // Clear inputs immediately
+                                      setInput("");
+                                      setUploadedFiles([]);
+                                      localStorage.removeItem('plc_copilot_uploaded_files');
+                                      
+                                      setIsLoading(true);
+                                      setApiCallInProgress(true);
+                                      setLastError(null);
+                                      
+                                      logTerminal(`Auto-submitting single choice MCQ: ${newSelections[0]}`);
+
+                                      try {
+                                        // Construct MCQ selections for API
+                                        const stripped = newSelections.map(o => stripMarkdown(o));
+
+                                        logApiSummary('SEND', `MCQ_AUTO_SUBMIT: ${stripped.join(' ||| ')}`, getCleanedProjectContext(), getPreviousCopilotMessage());
+
+                                        const response: ContextResponse = await apiClient.updateContext(
+                                          getCleanedProjectContext(),
+                                          convertStageToApiFormat(currentStage),
+                                          undefined, // no message
+                                          stripped, // mcqResponses
+                                          undefined, // no files for MCQ-only submissions
+                                          getPreviousCopilotMessage(), // previous copilot message for context
+                                          sessionId // Pass session ID from URL params
+                                        );
+
+                                        logApiSummary('RECV', response.chat_message, response.updated_context);
+
+                                        // Verify session ID
+                                        verifySessionId(response);
+
+                                        // Update context from backend response
+                                        updateContextFromResponse(response);
+                                        
+                                        // Update project context from API response
+                                        setProjectContext(prev => ({
+                                          ...response.updated_context,
+                                          deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+                                        }));
+                                        
+                                        // Update stage if changed - but only if we haven't reached code generation yet
+                                        const stageMapping: Record<string, typeof currentStage> = {
+                                          'gathering_requirements': 'gather_requirements',
+                                          'code_generation': 'code_generation',
+                                          'refinement_testing': 'refinement_testing'
+                                        };
+                                        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+                                        
+                                        // Only allow backend-driven stage transitions if we haven't reached code generation yet
+                                        if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
+                                          handleStageTransition(mappedStage, 'Backend updated stage');
+                                        }
+                                        
+                                        // Special case: transition to refinement_testing when backend returns generated code for the first time
+                                        // But only if we're currently in code_generation stage
+                                        if (response.generated_code && response.generated_code.trim() !== '') {
+                                          if (currentStage === 'code_generation') {
+                                            handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+                                          }
+                                        }
+                                        
+                                        // Update progress if provided
+                                        if (response.gathering_requirements_estimated_progress !== undefined) {
+                                          setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
+                                        }
+                                        
+                                        // Check if response contains MCQ and extract options
+                                        const mcqOptions = response.is_mcq ? response.mcq_options : null;
+                                        if (mcqOptions && mcqOptions.length > 0) {
+                                          logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+                                        }
+                                        
+                                        const assistantMessage: Message = {
+                                          id: Date.now().toString(),
+                                          content: response.chat_message,
+                                          role: "assistant",
+                                          timestamp: new Date(),
+                                          mcqOptions: mcqOptions || undefined,
+                                          isMultiSelect: response.is_multiselect
+                                        };
+                                        setMessages(prev => [...prev, assistantMessage]);
+                                        
+                                      } catch (error) {
+                                        console.error('Auto-submit API call failed:', error);
+                                        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                                        setLastError(errorMessage);
+                                        
+                                        const errorResponse: Message = {
+                                          id: Date.now().toString(),
+                                          content: `Error: ${errorMessage}. Please try again.`,
+                                          role: "assistant",
+                                          timestamp: new Date()
+                                        };
+                                        setMessages(prev => [...prev, errorResponse]);
+                                      } finally {
+                                        setIsLoading(false);
+                                        setApiCallInProgress(false);
+                                      }
+                                    }, 100);
+                                  }
                                 }}
                                 className={`px-3 py-2 rounded-lg border text-left transition-colors ${
                                   !isInteractive 
@@ -2152,13 +2268,14 @@ END_PROGRAM`}
                     try {
                       const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
                       const hasMcqSelection = !Object.values(selectedMcqOptions).every(options => !options || options.length === 0);
-                      // If not mobile, require either text or MCQ selection. On mobile, allow submit when MCQ selections exist even if input is empty.
+                      const hasFiles = uploadedFiles.length > 0;
+                      // If not mobile, require either text, MCQ selection, or files. On mobile, allow submit when MCQ selections or files exist even if input is empty.
                       if (isMobile) {
-                        return !(input.trim() || hasMcqSelection) || isLoading;
+                        return !(input.trim() || hasMcqSelection || hasFiles) || isLoading;
                       }
-                      return (!input.trim() && !hasMcqSelection) || isLoading;
+                      return (!input.trim() && !hasMcqSelection && !hasFiles) || isLoading;
                     } catch {
-                      return (!input.trim() && Object.values(selectedMcqOptions).every(options => !options || options.length === 0)) || isLoading;
+                      return (!input.trim() && Object.values(selectedMcqOptions).every(options => !options || options.length === 0) && uploadedFiles.length === 0) || isLoading;
                     }
                   })()}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -2313,7 +2430,11 @@ END_PROGRAM`}
                         <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                           {message.role === "user" ? (
                             <div className="max-w-[85%] rounded-lg px-4 py-3 bg-orange-500 text-white">
-                              <p className="whitespace-pre-wrap">{message.content}</p>
+                              {message.content ? (
+                                <p className="whitespace-pre-wrap">{message.content}</p>
+                              ) : message.hasFiles ? (
+                                <p className="text-sm italic opacity-80">Files uploaded</p>
+                              ) : null}
                               <time className="text-xs opacity-70 mt-1 block">
                                 {message.timestamp.toLocaleTimeString()}
                               </time>
@@ -2402,7 +2523,7 @@ END_PROGRAM`}
                                     <button
                                       key={optionIndex}
                                       disabled={!isInteractive}
-                                      onClick={() => {
+                                      onClick={async () => {
                                         if (!isInteractive) return;
                                         
                                         const currentSelections = selectedMcqOptions[message.id] || [];
@@ -2426,6 +2547,117 @@ END_PROGRAM`}
                                         }));
                                         
                                         logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
+                                        
+                                        // For single choice MCQs, automatically submit when an option is selected
+                                        if (!message.isMultiSelect && newSelections.length > 0) {
+                                          // Use a short delay to allow UI to update first
+                                          setTimeout(async () => {
+                                            if (isLoading || apiCallInProgress) return;
+                                            
+                                            // Capture files before clearing UI state
+                                            const filesToSend = [...uploadedFiles];
+                                            
+                                            // Clear inputs immediately
+                                            setInput("");
+                                            setUploadedFiles([]);
+                                            localStorage.removeItem('plc_copilot_uploaded_files');
+                                            
+                                            setIsLoading(true);
+                                            setApiCallInProgress(true);
+                                            setLastError(null);
+                                            
+                                            logTerminal(`Auto-submitting single choice MCQ: ${newSelections[0]}`);
+
+                                            try {
+                                              // Construct MCQ selections for API
+                                              const stripped = newSelections.map(o => stripMarkdown(o));
+
+                                              logApiSummary('SEND', `MCQ_AUTO_SUBMIT: ${stripped.join(' ||| ')}`, getCleanedProjectContext(), getPreviousCopilotMessage());
+
+                                              const response: ContextResponse = await apiClient.updateContext(
+                                                getCleanedProjectContext(),
+                                                convertStageToApiFormat(currentStage),
+                                                undefined, // no message
+                                                stripped, // mcqResponses
+                                                undefined, // no files for MCQ-only submissions
+                                                getPreviousCopilotMessage(), // previous copilot message for context
+                                                sessionId // Pass session ID from URL params
+                                              );
+
+                                              logApiSummary('RECV', response.chat_message, response.updated_context);
+
+                                              // Verify session ID
+                                              verifySessionId(response);
+
+                                              // Update context from backend response
+                                              updateContextFromResponse(response);
+                                              
+                                              // Update project context from API response
+                                              setProjectContext(prev => ({
+                                                ...response.updated_context,
+                                                deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+                                              }));
+                                              
+                                              // Update stage if changed - but only if we haven't reached code generation yet
+                                              const stageMapping: Record<string, typeof currentStage> = {
+                                                'gathering_requirements': 'gather_requirements',
+                                                'code_generation': 'code_generation',
+                                                'refinement_testing': 'refinement_testing'
+                                              };
+                                              const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+                                              
+                                              // Only allow backend-driven stage transitions if we haven't reached code generation yet
+                                              if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
+                                                handleStageTransition(mappedStage, 'Backend updated stage');
+                                              }
+                                              
+                                              // Special case: transition to refinement_testing when backend returns generated code for the first time
+                                              // But only if we're currently in code_generation stage
+                                              if (response.generated_code && response.generated_code.trim() !== '') {
+                                                if (currentStage === 'code_generation') {
+                                                  handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+                                                }
+                                              }
+                                              
+                                              // Update progress if provided
+                                              if (response.gathering_requirements_estimated_progress !== undefined) {
+                                                setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
+                                              }
+                                              
+                                              // Check if response contains MCQ and extract options
+                                              const mcqOptions = response.is_mcq ? response.mcq_options : null;
+                                              if (mcqOptions && mcqOptions.length > 0) {
+                                                logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+                                              }
+                                              
+                                              const assistantMessage: Message = {
+                                                id: Date.now().toString(),
+                                                content: response.chat_message,
+                                                role: "assistant",
+                                                timestamp: new Date(),
+                                                mcqOptions: mcqOptions || undefined,
+                                                isMultiSelect: response.is_multiselect
+                                              };
+                                              setMessages(prev => [...prev, assistantMessage]);
+                                              
+                                            } catch (error) {
+                                              console.error('Auto-submit API call failed:', error);
+                                              const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                                              setLastError(errorMessage);
+                                              
+                                              const errorResponse: Message = {
+                                                id: Date.now().toString(),
+                                                content: `Error: ${errorMessage}. Please try again.`,
+                                                role: "assistant",
+                                                timestamp: new Date()
+                                              };
+                                              setMessages(prev => [...prev, errorResponse]);
+                                            } finally {
+                                              setIsLoading(false);
+                                              setApiCallInProgress(false);
+                                            }
+                                          }, 100);
+                                        }
                                       }}
                                       className={`px-3 py-2 rounded-lg border text-left transition-colors ${
                                         !isInteractive 
@@ -2558,19 +2790,34 @@ END_PROGRAM`}
 
                     <div className="relative">
                       <textarea
-                        value={selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? input) : input}
+                        value={selectedFileId ? (() => {
+                          const selectedFile = uploadedFiles.find(f => f.id === selectedFileId);
+                          // Don't show content for binary files (base64 encoded)
+                          if (selectedFile?.isBase64) {
+                            return `[Binary file: ${selectedFile.name}]\nThis file contains binary data and cannot be edited as text.`;
+                          }
+                          return selectedFile?.content ?? input;
+                        })() : input}
                         onChange={(e) => {
                           const val = e.target.value;
                           if (selectedFileId) {
-                            setUploadedFiles(prev => prev.map(f => f.id === selectedFileId ? { ...f, content: val } : f));
+                            const selectedFile = uploadedFiles.find(f => f.id === selectedFileId);
+                            // Don't allow editing binary files
+                            if (!selectedFile?.isBase64) {
+                              setUploadedFiles(prev => prev.map(f => f.id === selectedFileId ? { ...f, content: val } : f));
+                            }
                           } else {
                             setInput(val);
                           }
                         }}
                         onKeyDown={handleKeyDownMobile}
-                        placeholder={selectedFileId ? "Edit file content..." : "Your thoughts..."}
-                        className={`w-full bg-gray-800 border border-gray-700 ${selectedFileId ? 'rounded-b-lg rounded-t-none' : 'rounded-lg'} px-4 py-3 ${selectedFileId ? 'pr-12' : 'pr-24'} resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400`}
+                        placeholder={selectedFileId ? (() => {
+                          const selectedFile = uploadedFiles.find(f => f.id === selectedFileId);
+                          return selectedFile?.isBase64 ? "Binary file - cannot edit" : "Edit file content...";
+                        })() : "Your thoughts..."}
+                        className={`w-full bg-gray-800 border border-gray-700 ${selectedFileId ? 'rounded-b-lg rounded-t-none' : 'rounded-lg'} px-4 py-3 ${selectedFileId ? 'pr-12' : 'pr-24'} resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-400 ${selectedFileId && uploadedFiles.find(f => f.id === selectedFileId)?.isBase64 ? 'bg-gray-900 cursor-not-allowed' : ''}`}
                         rows={selectedFileId ? 8 : 2}
+                        readOnly={selectedFileId ? uploadedFiles.find(f => f.id === selectedFileId)?.isBase64 : false}
                       />
                       {/* File upload button - only show when not editing a file, match index page positioning */}
                       {!selectedFileId && (
@@ -2589,6 +2836,7 @@ END_PROGRAM`}
                           try {
                             const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
                             const hasMcqSelection = !Object.values(selectedMcqOptions).every(options => !options || options.length === 0);
+                            const hasFiles = uploadedFiles.length > 0;
 
                             // If editing a file, require file content unless mobile and MCQ selections exist
                             if (selectedFileId) {
@@ -2597,11 +2845,11 @@ END_PROGRAM`}
                               return !fileContent || isLoading;
                             }
 
-                            // Not editing a file: consider input or MCQ selections
-                            if (isMobile) return !(input.trim() || hasMcqSelection) || isLoading;
-                            return !input.trim() || isLoading;
+                            // Not editing a file: consider input, MCQ selections, or files
+                            if (isMobile) return !(input.trim() || hasMcqSelection || hasFiles) || isLoading;
+                            return (!input.trim() && !hasMcqSelection && !hasFiles) || isLoading;
                           } catch {
-                            return !(selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? '').trim() : input.trim()) || isLoading;
+                            return !(selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? '').trim() : (input.trim() || uploadedFiles.length > 0)) || isLoading;
                           }
                         })()}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

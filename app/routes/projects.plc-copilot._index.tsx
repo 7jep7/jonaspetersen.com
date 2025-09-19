@@ -15,7 +15,8 @@ interface UploadedFile {
   name: string;
   size: number;
   type: string;
-  content?: string | null;
+  content?: string | null; // Base64 encoded for binary files, text for text files
+  isBase64?: boolean; // Flag to indicate if content is base64 encoded
 }
 
 export default function PLCCopilotIndex() {
@@ -53,21 +54,42 @@ export default function PLCCopilotIndex() {
     }
   }, []);
 
-  // Persist uploadedFiles to localStorage (excluding content to avoid quota issues)
+  // Persist uploadedFiles to localStorage (including content for API calls)
   useEffect(() => {
     try {
-      // Only save file metadata (name, type, size, id) not content
-      const filesMetadata = uploadedFiles.map(file => ({
+      // Save complete file data including content for API calls
+      const filesData = uploadedFiles.map(file => ({
         id: file.id,
         name: file.name,
         size: file.size,
-        type: file.type
-        // Exclude content to prevent localStorage quota exceeded error
+        type: file.type,
+        content: file.content, // Include content for API calls
+        isBase64: file.isBase64 // Include base64 flag
       }));
-      console.log('Index page: Saving files metadata to localStorage:', filesMetadata);
-      localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(filesMetadata));
+      console.log('Index page: Saving files data to localStorage:', filesData.map(f => ({ 
+        name: f.name, 
+        hasContent: !!f.content, 
+        isBase64: f.isBase64,
+        contentLength: f.content?.length || 0 
+      })));
+      localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(filesData));
     } catch (e) {
-      console.error('Index page: Failed to save files to localStorage:', e);
+      console.error('Index page: Failed to save files to localStorage (quota exceeded?):', e);
+      // Fallback: Save without content if quota exceeded
+      try {
+        const filesMetadata = uploadedFiles.map(file => ({
+          id: file.id,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          isBase64: file.isBase64
+          // No content to avoid quota issues
+        }));
+        localStorage.setItem('plc_copilot_uploaded_files', JSON.stringify(filesMetadata));
+        console.warn('Index page: Saved files without content due to quota limits');
+      } catch (fallbackError) {
+        console.error('Index page: Failed to save even file metadata:', fallbackError);
+      }
     }
   }, [uploadedFiles]);
 
@@ -116,11 +138,35 @@ export default function PLCCopilotIndex() {
     Array.from(files).forEach(async (file) => {
       const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       let content: string | null = null;
+      let isBase64 = false;
+      
       try {
-        // Try to read text content for common text-like files
-        content = await file.text();
+        // Check if file is likely text-based
+        const isTextFile = file.type.startsWith('text/') || 
+                          file.type === 'application/json' ||
+                          file.type === 'application/xml' ||
+                          file.name.endsWith('.txt') ||
+                          file.name.endsWith('.json') ||
+                          file.name.endsWith('.xml') ||
+                          file.name.endsWith('.csv');
+        
+        if (isTextFile) {
+          // For text files, read as text
+          content = await file.text();
+          isBase64 = false;
+        } else {
+          // For binary files (PDFs, images, etc), convert to base64
+          const arrayBuffer = await file.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          content = btoa(binary);
+          isBase64 = true;
+        }
       } catch (err) {
-        // Non-text files (pdf, images) will not have readable text; leave content null
+        console.error('Failed to read file:', file.name, err);
         content = null;
       }
 
@@ -129,7 +175,8 @@ export default function PLCCopilotIndex() {
         name: file.name,
         size: file.size,
         type: file.type,
-        content
+        content,
+        isBase64
       };
 
       setUploadedFiles(prev => {
