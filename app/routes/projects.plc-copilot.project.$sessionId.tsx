@@ -200,6 +200,8 @@ export default function PLCCopilotProject() {
   const [stageProgress, setStageProgress] = useState<{ confidence?: number }>({});
   const [generatedCode, setGeneratedCode] = useState<string>('');
   const [generateWarning, setGenerateWarning] = useState<string | null>(null);
+  // Track when we've reached code generation to prevent further automatic stage transitions
+  const [hasReachedCodeGeneration, setHasReachedCodeGeneration] = useState<boolean>(false);
 
   const [activeView, setActiveView] = useState<OutputView>(() => {
     // Determine initial view while respecting mobile UX:
@@ -723,7 +725,7 @@ export default function PLCCopilotProject() {
         deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
       }));
       
-      // Update stage if changed
+      // Update stage if changed - but only if we haven't reached code generation yet
       // Map API stage names to UI stage names for comparison
       const stageMapping: Record<string, typeof currentStage> = {
         'gathering_requirements': 'gather_requirements',
@@ -732,14 +734,15 @@ export default function PLCCopilotProject() {
       };
       const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
       
-      if (mappedStage !== currentStage) {
+      // Only allow backend-driven stage transitions if we haven't reached code generation yet
+      if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
         handleStageTransition(mappedStage, 'Backend updated stage');
       }
       
-      // Force transition to refinement_testing when backend returns generated code
+      // Special case: transition to refinement_testing when backend returns generated code for the first time
+      // But only if we're currently in code_generation stage
       if (response.generated_code && response.generated_code.trim() !== '') {
-        const currentStageAfterBackendUpdate = mappedStage;
-        if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+        if (currentStage === 'code_generation') {
           handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
         }
       }
@@ -971,7 +974,7 @@ export default function PLCCopilotProject() {
           deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
         }));
         
-        // Update stage if changed
+        // Update stage if changed - but only if we haven't reached code generation yet
         // Map API stage names to UI stage names for comparison
         const stageMapping: Record<string, typeof currentStage> = {
           'gathering_requirements': 'gather_requirements',
@@ -980,14 +983,15 @@ export default function PLCCopilotProject() {
         };
         const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
         
-        if (mappedStage !== currentStage) {
+        // Only allow backend-driven stage transitions if we haven't reached code generation yet
+        if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
           handleStageTransition(mappedStage, 'Backend updated stage');
         }
         
-        // Force transition to refinement_testing when backend returns generated code
+        // Special case: transition to refinement_testing when backend returns generated code for the first time
+        // But only if we're currently in code_generation stage
         if (response.generated_code && response.generated_code.trim() !== '') {
-          const currentStageAfterBackendUpdate = mappedStage;
-          if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+          if (currentStage === 'code_generation') {
             handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
           }
         }
@@ -1126,7 +1130,7 @@ export default function PLCCopilotProject() {
         deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
       }));
       
-      // Update stage if changed
+      // Update stage if changed - but only if we haven't reached code generation yet
       // Map API stage names to UI stage names for comparison
       const stageMapping: Record<string, typeof currentStage> = {
         'gathering_requirements': 'gather_requirements',
@@ -1135,14 +1139,15 @@ export default function PLCCopilotProject() {
       };
       const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
       
-      if (mappedStage !== currentStage) {
+      // Only allow backend-driven stage transitions if we haven't reached code generation yet
+      if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
         handleStageTransition(mappedStage, 'Backend updated stage');
       }
       
-      // Force transition to refinement_testing when backend returns generated code
+      // Special case: transition to refinement_testing when backend returns generated code for the first time
+      // But only if we're currently in code_generation stage
       if (response.generated_code && response.generated_code.trim() !== '') {
-        const currentStageAfterBackendUpdate = mappedStage;
-        if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+        if (currentStage === 'code_generation') {
           handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
         }
       }
@@ -1265,6 +1270,11 @@ export default function PLCCopilotProject() {
     logTerminal(`STAGE: ${currentStage} -> ${newStage}${reason ? ` (${reason})` : ''}`);
     setCurrentStage(newStage);
     
+    // Set flag when reaching code generation stage
+    if (newStage === 'code_generation' || newStage === 'refinement_testing') {
+      setHasReachedCodeGeneration(true);
+    }
+    
     // Auto-switch to Structured Text view when entering code generation or refinement testing stage
     if ((newStage === 'code_generation' || newStage === 'refinement_testing') && activeView !== 'structured-text') {
       setActiveView('structured-text');
@@ -1301,6 +1311,9 @@ export default function PLCCopilotProject() {
   const handleSkipToCode = async () => {
     if (isLoading || apiCallInProgress) return; // Prevent if already processing
     
+    // Immediately transition to code_generation stage when user clicks "Skip to Code"
+    handleStageTransition('code_generation', 'User clicked Skip to Code');
+    
     const skipMessage: Message = {
       id: Date.now().toString(),
       content: "Generate Structured Text for a PLC now.",
@@ -1312,7 +1325,7 @@ export default function PLCCopilotProject() {
     // Add the message to UI first
     setMessages(prev => [...prev, skipMessage]);
     
-    // Send the message to get LLM response - stage transition will happen when backend responds
+    // Send the message to get LLM response
     await sendMessage(skipMessage);
   };
 
@@ -2022,7 +2035,7 @@ export default function PLCCopilotProject() {
                                           deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
                                         }));
                                         
-                                        // Update stage if changed
+                                        // Update stage if changed - but only if we haven't reached code generation yet
                                         const stageMapping: Record<string, typeof currentStage> = {
                                           'gathering_requirements': 'gather_requirements',
                                           'code_generation': 'code_generation',
@@ -2030,14 +2043,15 @@ export default function PLCCopilotProject() {
                                         };
                                         const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
                                         
-                                        if (mappedStage !== currentStage) {
+                                        // Only allow backend-driven stage transitions if we haven't reached code generation yet
+                                        if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
                                           handleStageTransition(mappedStage, 'Backend updated stage');
                                         }
                                         
-                                        // Force transition to refinement_testing when backend returns generated code
+                                        // Special case: transition to refinement_testing when backend returns generated code for the first time
+                                        // But only if we're currently in code_generation stage
                                         if (response.generated_code && response.generated_code.trim() !== '') {
-                                          const currentStageAfterBackendUpdate = mappedStage;
-                                          if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+                                          if (currentStage === 'code_generation') {
                                             handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
                                           }
                                         }
@@ -2542,7 +2556,7 @@ export default function PLCCopilotProject() {
                                                 deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
                                               }));
                                               
-                                              // Update stage if changed
+                                              // Update stage if changed - but only if we haven't reached code generation yet
                                               const stageMapping: Record<string, typeof currentStage> = {
                                                 'gathering_requirements': 'gather_requirements',
                                                 'code_generation': 'code_generation',
@@ -2550,14 +2564,15 @@ export default function PLCCopilotProject() {
                                               };
                                               const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
                                               
-                                              if (mappedStage !== currentStage) {
+                                              // Only allow backend-driven stage transitions if we haven't reached code generation yet
+                                              if (mappedStage !== currentStage && !hasReachedCodeGeneration) {
                                                 handleStageTransition(mappedStage, 'Backend updated stage');
                                               }
                                               
-                                              // Force transition to refinement_testing when backend returns generated code
+                                              // Special case: transition to refinement_testing when backend returns generated code for the first time
+                                              // But only if we're currently in code_generation stage
                                               if (response.generated_code && response.generated_code.trim() !== '') {
-                                                const currentStageAfterBackendUpdate = mappedStage;
-                                                if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+                                                if (currentStage === 'code_generation') {
                                                   handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
                                                 }
                                               }
