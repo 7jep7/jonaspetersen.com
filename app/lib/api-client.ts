@@ -1,7 +1,7 @@
 // API client for PLC Copilot backend
 // Supports both localhost (development) and production (render.com) endpoints
 
-// Testing mode - set to true to enable localhost health checks in development
+// Testing mode - set to false to use production backend (CORS now fixed)
 const ENABLE_LOCALHOST_TESTING = false;
 
 interface ProjectContext {
