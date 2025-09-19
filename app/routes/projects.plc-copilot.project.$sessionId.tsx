@@ -1257,10 +1257,26 @@ export default function PLCCopilotProject() {
           // Text file - read as text
           content = await file.text();
         } else {
-          // Binary file - encode as base64
-          const arrayBuffer = await file.arrayBuffer();
-          const uint8Array = new Uint8Array(arrayBuffer);
-          content = btoa(String.fromCharCode(...uint8Array));
+          // Binary file - encode as base64 using FileReader to avoid stack overflow for large files
+          content = await new Promise<string | null>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              try {
+                const result = reader.result as string;
+                // result is like "data:application/pdf;base64,JVBERi0x..."
+                const base64 = result.split(',')[1] ?? null;
+                resolve(base64);
+              } catch (e) {
+                console.error('Failed to convert file to base64 via FileReader:', file.name, e);
+                resolve(null);
+              }
+            };
+            reader.onerror = (e) => {
+              console.error('FileReader error reading file:', file.name, e);
+              resolve(null);
+            };
+            reader.readAsDataURL(file);
+          });
           isBase64 = true;
         }
       } catch (err) {

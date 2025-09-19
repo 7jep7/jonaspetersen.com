@@ -10,6 +10,7 @@ describe('File Corruption Investigation', () => {
 
   describe('File content integrity during upload process', () => {
     it('should verify binary file handling in upload process', async () => {
+
       // Create a mock PDF file with binary content (PDF header)
       const pdfHeader = new Uint8Array([
         0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, // %PDF-1.4
@@ -31,25 +32,59 @@ describe('File Corruption Investigation', () => {
         try {
           // This is the problematic part - session screen tries to read as text first
           content = await file.text()
-          console.log(`Text reading succeeded, content length: ${content.length}`)
-          console.log(`First 50 chars: "${content.slice(0, 50)}"`)
+            // Silent: record content for detection only
           
-          // Check if content looks like binary (has null bytes or non-printable chars)
+          // Check if content looks like binary (has null bytes, replacement chars, or round-trip length mismatch)
           const hasNullBytes = content.includes('\0')
-          const hasHighBytes = /[\x80-\xFF]/.test(content)
-          console.log(`Has null bytes: ${hasNullBytes}`)
-          console.log(`Has high bytes (>127): ${hasHighBytes}`)
-          
+          const hasReplacementChar = content.includes('\uFFFD')
+          // Compare byte lengths after round-trip through TextEncoder to detect decoding changes
+          let roundTripMismatch = false
+          try {
+            const encoded = new TextEncoder().encode(content)
+            roundTripMismatch = encoded.length !== fileContent.length
+          } catch (e) {
+            // If TextEncoder isn't available or fails, skip this check
+            roundTripMismatch = false
+          }
+
+          // Silent: detection variables set
+
+          // If the text read contains binary indicators, fall back to base64 encoding
+          if (hasNullBytes || hasReplacementChar || roundTripMismatch) {
+            // Detected binary data in text read - falling back to base64 encoding
+            try {
+              const arrayBuffer = await file.arrayBuffer()
+              const uint8Array = new Uint8Array(arrayBuffer)
+              if (typeof Buffer !== 'undefined') {
+                content = Buffer.from(uint8Array).toString('base64')
+              } else {
+                // Build binary string safely without spreading large arrays
+                let binary = ''
+                for (let i = 0; i < uint8Array.length; i++) {
+                  binary += String.fromCharCode(uint8Array[i])
+                }
+                content = btoa(binary)
+              }
+              isBase64 = true
+            } catch (base64Error) {
+              console.log('Base64 encoding failed (fallback):', base64Error)
+              content = null
+            }
+          }
         } catch (err) {
-          console.log('Text reading failed, trying base64:', err)
+          // Text reading failed, try base64
           
           // Fallback to base64 for binary files
           try {
             const arrayBuffer = await file.arrayBuffer()
             const uint8Array = new Uint8Array(arrayBuffer)
-            content = btoa(String.fromCharCode(...uint8Array))
+            // Build binary string safely
+            let binary = ''
+            for (let i = 0; i < uint8Array.length; i++) {
+              binary += String.fromCharCode(uint8Array[i])
+            }
+            content = btoa(binary)
             isBase64 = true
-            console.log(`Base64 encoding succeeded, length: ${content.length}`)
           } catch (base64Error) {
             console.log('Base64 encoding failed:', base64Error)
             content = null
@@ -62,46 +97,42 @@ describe('File Corruption Investigation', () => {
       const result = await simulateFileUpload(pdfHeader, 'test.pdf')
       
       // Now simulate the API conversion process (File object creation)
-      console.log('\nSimulating API File object creation...')
+  // Simulating API File object creation
       
       let blob: Blob
       if (result.isBase64 && result.content) {
-        console.log('Processing as base64 content')
+  // Processing as base64 content
         try {
           const binaryString = atob(result.content)
+          // decoded binaryString
           const bytes = new Uint8Array(binaryString.length)
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i)
           }
           blob = new Blob([bytes], { type: 'application/pdf' })
-          console.log(`Reconstructed blob size: ${blob.size}`)
         } catch (error) {
           console.error('Failed to decode base64:', error)
           blob = new Blob([''], { type: 'application/pdf' })
         }
       } else {
-        console.log('Processing as text content')
+  // Processing as text content
         blob = new Blob([result.content || ''], { type: 'application/pdf' })
-        console.log(`Text blob size: ${blob.size}`)
+        
       }
       
       const finalFile = new File([blob], 'test.pdf', { type: 'application/pdf' })
-      console.log(`Final File object size: ${finalFile.size}`)
+  // Final File object size available
       
       // Verify integrity
       const finalBuffer = await finalFile.arrayBuffer()
       const finalBytes = new Uint8Array(finalBuffer)
-      console.log(`Final header: ${Array.from(finalBytes.slice(0, 8)).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(' ')}`)
+  // Final header available
       
       // Check if the file was corrupted
       const originalHeader = Array.from(pdfHeader.slice(0, 8))
       const finalHeader = Array.from(finalBytes.slice(0, 8))
       
-      console.log('\nIntegrity check:')
-      console.log(`Original: [${originalHeader.map(b => `0x${b.toString(16).padStart(2, '0')}`).join(', ')}]`)
-      console.log(`Final:    [${finalHeader.map(b => `0x${b.toString(16).padStart(2, '0')}`).join(', ')}]`)
-      console.log(`Size match: ${pdfHeader.length === finalBytes.length}`)
-      console.log(`Header match: ${JSON.stringify(originalHeader) === JSON.stringify(finalHeader)}`)
+  // Integrity check: original and final headers available for assertion
       
       // Expect no corruption
       expect(finalBytes.length).toBe(pdfHeader.length)
@@ -138,7 +169,15 @@ describe('File Corruption Investigation', () => {
         try {
           const arrayBuffer = await indexFile.arrayBuffer()
           const uint8Array = new Uint8Array(arrayBuffer)
-          indexContent = btoa(String.fromCharCode(...uint8Array))
+          if (typeof Buffer !== 'undefined') {
+            indexContent = Buffer.from(uint8Array).toString('base64')
+          } else {
+            let binary = ''
+            for (let i = 0; i < uint8Array.length; i++) {
+              binary += String.fromCharCode(uint8Array[i])
+            }
+            indexContent = btoa(binary)
+          }
           indexIsBase64 = true
           console.log(`Index page base64 length: ${indexContent.length}`)
         } catch (error) {
