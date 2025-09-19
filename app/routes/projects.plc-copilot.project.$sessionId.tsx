@@ -1386,83 +1386,10 @@ export default function PLCCopilotProject() {
     };
   }, [sessionId]);
 
-  // Explicit session cleanup function
-  const handleEndSession = async () => {
-    if (!sessionId) return;
-    
-    try {
-      logTerminal(`Cleaning up session: ${sessionId}`);
-      const result = await apiClient.cleanupSession([sessionId]);
-      logTerminal(`Session cleanup successful: ${result.message}`);
-      
-      // Clear local storage for this session
-      localStorage.removeItem(`plc_copilot_context_${sessionId}`);
-      localStorage.removeItem('plc_copilot_uploaded_files');
-      
-      // Optionally redirect to sessions list or show success message
-      // navigate('/projects/plc-copilot/session');
-    } catch (error) {
-      console.error('Failed to cleanup session:', error);
-      logTerminal(`Session cleanup failed: ${error}`);
-    }
-  };
-
   // Download generated code function
   const downloadGeneratedCode = () => {
     // Get the current content from the textarea (either generatedCode or placeholder)
-    const content = generatedCode || `// No code generated yet
-// PLC Copilot will generate Structured Text code here
-// based on your requirements and device context.
-
-// Example placeholder:
-PROGRAM ConveyorControl
-VAR
-    bStart          : BOOL := FALSE;      // Start button
-    bStop           : BOOL := FALSE;      // Stop button  
-    bEmergencyStop  : BOOL := FALSE;      // E-stop
-    bMotorRunning   : BOOL := FALSE;      // Motor status
-    bSafetyOK       : BOOL := TRUE;       // Safety check
-    
-    // Inputs
-    bStartButton    : BOOL;
-    bStopButton     : BOOL;
-    bEStop          : BOOL;
-    bSafetyGate     : BOOL;
-    
-    // Outputs
-    qMotorContactor : BOOL;
-    qStatusLight    : BOOL;
-END_VAR
-
-// Main control logic
-IF bEStop OR NOT bSafetyGate THEN
-    bSafetyOK := FALSE;
-    qMotorContactor := FALSE;
-    bMotorRunning := FALSE;
-ELSE
-    bSafetyOK := TRUE;
-END_IF;
-
-// Start/Stop logic
-IF bStartButton AND bSafetyOK AND NOT bMotorRunning THEN
-    bStart := TRUE;
-ELSIF bStopButton OR NOT bSafetyOK THEN
-    bStart := FALSE;
-END_IF;
-
-// Motor control
-IF bStart AND bSafetyOK THEN
-    qMotorContactor := TRUE;
-    bMotorRunning := TRUE;
-ELSE
-    qMotorContactor := FALSE;
-    bMotorRunning := FALSE;
-END_IF;
-
-// Status indication
-qStatusLight := bMotorRunning;
-
-END_PROGRAM`;
+    const content = generatedCode || `// Generated code will appear here`;
     
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -1505,59 +1432,7 @@ END_PROGRAM`;
               {/* BACKGROUND_CONTAINER */}
               <div className="h-full bg-gray-900 rounded-lg p-6">
                 <textarea
-                    value={generatedCode || `// No code generated yet
-// PLC Copilot will generate Structured Text code here
-// based on your requirements and device context.
-
-// Example placeholder:
-PROGRAM ConveyorControl
-VAR
-    bStart          : BOOL := FALSE;      // Start button
-    bStop           : BOOL := FALSE;      // Stop button  
-    bEmergencyStop  : BOOL := FALSE;      // E-stop
-    bMotorRunning   : BOOL := FALSE;      // Motor status
-    bSafetyOK       : BOOL := TRUE;       // Safety check
-    
-    // Inputs
-    bStartButton    : BOOL;
-    bStopButton     : BOOL;
-    bEStop          : BOOL;
-    bSafetyGate     : BOOL;
-    
-    // Outputs
-    qMotorContactor : BOOL;
-    qStatusLight    : BOOL;
-END_VAR
-
-// Main control logic
-IF bEStop OR NOT bSafetyGate THEN
-    bSafetyOK := FALSE;
-    qMotorContactor := FALSE;
-    bMotorRunning := FALSE;
-ELSE
-    bSafetyOK := TRUE;
-END_IF;
-
-// Start/Stop logic
-IF bStartButton AND bSafetyOK AND NOT bMotorRunning THEN
-    bStart := TRUE;
-ELSIF bStopButton OR NOT bSafetyOK THEN
-    bStart := FALSE;
-END_IF;
-
-// Motor control
-IF bStart AND bSafetyOK THEN
-    qMotorContactor := TRUE;
-    bMotorRunning := TRUE;
-ELSE
-    qMotorContactor := FALSE;
-    bMotorRunning := FALSE;
-END_IF;
-
-// Status indication
-qStatusLight := bMotorRunning;
-
-END_PROGRAM`}
+                    value={generatedCode || `// Generated code will appear here`}
                     onChange={(e) => setGeneratedCode(e.target.value)}
                     className="w-full h-full resize-none bg-transparent text-gray-200 whitespace-pre font-mono text-sm border-none outline-none"
                     spellCheck={false}
@@ -1915,16 +1790,6 @@ END_PROGRAM`}
             </div>
           </div>
           
-          {/* Session Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleEndSession}
-              className="px-3 py-1 text-xs text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-500 rounded transition-colors"
-              title="End session and cleanup files"
-            >
-              End Session
-            </button>
-          </div>
         </div>
       </header>
 
