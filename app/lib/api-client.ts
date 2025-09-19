@@ -95,13 +95,13 @@ class PLCCopilotApiClient {
     // Cleanup on page unload using sendBeacon for reliability
     const handleUnload = () => {
       if (this.sessionId) {
-        const cleanupData = JSON.stringify({
-          session_ids: [this.sessionId]
-        });
+        // Backend expects FormData with session_id field
+        const formData = new FormData();
+        formData.append('session_id', this.sessionId);
         
         try {
           // Use sendBeacon for reliable cleanup during page unload
-          navigator.sendBeacon(`${this.baseUrl}/api/v1/context/cleanup`, cleanupData);
+          navigator.sendBeacon(`${this.baseUrl}/api/v1/context/cleanup`, formData);
         } catch (error) {
           console.warn('Failed to send cleanup beacon:', error);
         }
@@ -227,28 +227,40 @@ class PLCCopilotApiClient {
     const idsToClean = sessionIds || [this.getSessionId()];
     
     try {
-      const response = await fetch(`${workingUrl}/api/v1/context/cleanup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          session_ids: idsToClean
-        })
-      });
+      // Backend expects multipart/form-data with single session_id field
+      // For multiple sessions, we need to call the endpoint multiple times
+      const cleanupResults: CleanupResponse[] = [];
+      
+      for (const sessionId of idsToClean) {
+        const formData = new FormData();
+        formData.append('session_id', sessionId);
+        
+        const response = await fetch(`${workingUrl}/api/v1/context/cleanup`, {
+          method: 'POST',
+          body: formData, // No Content-Type header - let browser set multipart/form-data
+        });
 
-      if (!response.ok) {
-        let errorMessage = `Cleanup failed: ${response.status}`;
-        try {
-          const errorData: ApiError = await response.json();
-          errorMessage = errorData.detail || errorData.message || errorMessage;
-        } catch {
-          // If JSON parsing fails, use the default error message
+        if (!response.ok) {
+          let errorMessage = `Cleanup failed: ${response.status}`;
+          try {
+            const errorData: ApiError = await response.json();
+            errorMessage = errorData.detail || errorData.message || errorMessage;
+          } catch {
+            // If JSON parsing fails, use the default error message
+          }
+          throw new Error(errorMessage);
         }
-        throw new Error(errorMessage);
-      }
 
-      const data: CleanupResponse = await response.json();
+        const data: CleanupResponse = await response.json();
+        cleanupResults.push(data);
+      }
+      
+      // Merge cleanup results
+      const combinedResult: CleanupResponse = {
+        message: `Cleaned up ${idsToClean.length} session(s)`,
+        cleaned_sessions: cleanupResults.flatMap(r => r.cleaned_sessions),
+        files_removed: cleanupResults.reduce((sum, r) => sum + r.files_removed, 0)
+      };
       
       // Clear session storage if we cleaned up the current session
       if (typeof window !== 'undefined' && idsToClean.includes(this.sessionId!)) {
@@ -257,7 +269,7 @@ class PLCCopilotApiClient {
         this.sessionId = null;
       }
       
-      return data;
+      return combinedResult;
     } catch (error) {
       console.error('Session cleanup failed:', error);
       // Non-critical - sessions auto-expire after 30 minutes
