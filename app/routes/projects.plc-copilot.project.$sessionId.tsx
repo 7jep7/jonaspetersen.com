@@ -108,21 +108,10 @@ interface UploadedFile {
 const convertDeviceConstantsToApiFormat = (deviceConstants: DeviceConstant[]): Record<string, any> => {
   const result: Record<string, any> = {};
   deviceConstants.forEach(constant => {
+    // Create dot notation key from path and name
     const fullPath = [...constant.path, constant.name];
-    let current = result;
-    
-    // Navigate to the right location in the nested object
-    for (let i = 0; i < fullPath.length - 1; i++) {
-      const key = fullPath[i];
-      // Only create object if key doesn't exist or if it's not already a string value
-      if (!current[key] || typeof current[key] === 'string') {
-        current[key] = {};
-      }
-      current = current[key];
-    }
-    
-    // Set the final value
-    current[fullPath[fullPath.length - 1]] = constant.value;
+    const dotNotationKey = fullPath.join('.');
+    result[dotNotationKey] = constant.value;
   });
   return result;
 };
@@ -130,23 +119,32 @@ const convertDeviceConstantsToApiFormat = (deviceConstants: DeviceConstant[]): R
 const convertApiFormatToDeviceConstants = (device_constants: Record<string, any>): DeviceConstant[] => {
   const result: DeviceConstant[] = [];
   
-  const traverse = (obj: any, currentPath: string[] = []) => {
-    Object.entries(obj).forEach(([key, value]) => {
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        traverse(value, [...currentPath, key]);
-      } else {
-        result.push({
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          path: currentPath,
-          name: key,
-          value: String(value),
-          source: 'api'
-        });
-      }
+  Object.entries(device_constants).forEach(([key, value]) => {
+    // Parse dot notation keys (e.g., "Device.Interface.Type" -> path: ["Device", "Interface"], name: "Type")
+    const keyParts = key.split('.').map(p => p.trim()).filter(Boolean);
+    
+    let path: string[];
+    let name: string;
+    
+    if (keyParts.length > 1) {
+      // Multi-level: last part is name, rest is path
+      path = keyParts.slice(0, -1);
+      name = keyParts[keyParts.length - 1];
+    } else {
+      // Single level: no path, key is the name
+      path = [];
+      name = key;
+    }
+    
+    result.push({
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      path,
+      name,
+      value: String(value),
+      source: 'api'
     });
-  };
+  });
   
-  traverse(device_constants);
   return result;
 };
 
