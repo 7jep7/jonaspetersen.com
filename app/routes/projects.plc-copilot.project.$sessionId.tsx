@@ -1266,7 +1266,7 @@ export default function PLCCopilotProject() {
     }
   }, [currentStage]);
 
-  // Handle skip to code button - sends a message and transitions stage
+  // Handle skip to code button - sends a message and waits for backend to transition stage
   const handleSkipToCode = async () => {
     if (isLoading || apiCallInProgress) return; // Prevent if already processing
     
@@ -1281,10 +1281,7 @@ export default function PLCCopilotProject() {
     // Add the message to UI first
     setMessages(prev => [...prev, skipMessage]);
     
-    // Transition to code generation stage
-    handleStageTransition('code_generation', 'User clicked Skip to Code button');
-    
-    // Send the message to get LLM response
+    // Send the message to get LLM response - stage transition will happen when backend responds
     await sendMessage(skipMessage);
   };
 
