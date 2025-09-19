@@ -1,10 +1,11 @@
 // API client for PLC Copilot backend
 // Supports both localhost (development) and production (render.com) endpoints
 
-// Enable localhost probing only in development builds running on localhost.
-// In production builds (import.meta.env && !import.meta.env.DEV) this will be false
-// and the client will use the production backend directly.
-const ENABLE_LOCALHOST_TESTING = typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.DEV === true;
+// Enable localhost probing when running on localhost, or when in development builds.
+// This ensures local dev/test environments try the local backend first, while
+// production builds on non-localhost use the production backend.
+const IMPORT_META_DEV = typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.DEV === true;
+const ENABLE_LOCALHOST_TESTING = IMPORT_META_DEV || (typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost');
 
 interface ProjectContext {
   device_constants: Record<string, any>;

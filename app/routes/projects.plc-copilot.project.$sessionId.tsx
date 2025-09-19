@@ -1337,9 +1337,8 @@ export default function PLCCopilotProject() {
   // Handle skip to code button - sends a message and waits for backend to transition stage
   const handleSkipToCode = async () => {
     if (isLoading || apiCallInProgress) return; // Prevent if already processing
-    
-    // Immediately transition to code_generation stage when user clicks "Skip to Code"
-    handleStageTransition('code_generation', 'User clicked Skip to Code');
+    // Do NOT transition immediately. Wait for backend response to determine stage and
+    // switch to Structured Text only after the backend returns generated code.
     
     const skipMessage: Message = {
       id: Date.now().toString(),
