@@ -312,7 +312,7 @@ export default function PLCCopilotProject() {
   const [editConstantValue, setEditConstantValue] = useState<string>("");
 
   // Placeholder text for Information field that gets cleared before API calls
-  const informationPlaceholder = "No device constants gathered yet. Information will be extracted from datasheets and conversations.";
+  const informationPlaceholder = "Project context and requirements will be gathered from conversations and uploaded files.";
 
   // Helper function to clean context before API calls (removes placeholder text)
   const getCleanedProjectContext = () => {
@@ -652,6 +652,15 @@ export default function PLCCopilotProject() {
       return;
     }
 
+    // Capture files before clearing UI state
+    const filesToSend = [...uploadedFiles];
+    
+    // Clear uploaded files immediately when sending message
+    if (uploadedFiles.length > 0) {
+      setUploadedFiles([]);
+      localStorage.removeItem('plc_copilot_uploaded_files');
+    }
+
     apiCallInProgressRef.current = true;
     setIsLoading(true);
     setApiCallInProgress(true);
@@ -668,7 +677,7 @@ export default function PLCCopilotProject() {
         convertStageToApiFormat(currentStage),
         userMessage.content,
         undefined, // mcqResponses
-        uploadedFiles.length > 0 ? uploadedFiles.map(f => {
+        filesToSend.length > 0 ? filesToSend.map(f => {
           // Convert UploadedFile to File object for API
           if (!f.content) {
             console.warn('File content missing for:', f.name, '- file will be empty');
@@ -729,6 +738,14 @@ export default function PLCCopilotProject() {
         handleStageTransition(mappedStage, 'Backend updated stage');
       }
       
+      // Force transition to refinement_testing when backend returns generated code
+      if (response.generated_code && response.generated_code.trim() !== '') {
+        const currentStageAfterBackendUpdate = mappedStage;
+        if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+          handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+        }
+      }
+      
       // Update progress if provided
       if (response.gathering_requirements_estimated_progress !== undefined) {
         logTerminal(`gathering_requirements_estimated_progress: ${response.gathering_requirements_estimated_progress}`);
@@ -770,11 +787,7 @@ export default function PLCCopilotProject() {
       setApiCallInProgress(false);
       apiCallInProgressRef.current = false;
       
-      // Clear uploaded files after successful API call (for initial messages with files)
-      if (uploadedFiles.length > 0) {
-        setUploadedFiles([]);
-        localStorage.removeItem('plc_copilot_uploaded_files');
-      }
+      // Files are already cleared immediately when message is sent
     }
   };
 
@@ -916,7 +929,10 @@ export default function PLCCopilotProject() {
 
     // Handle MCQ-only submissions (no user message created)
   if (!input.trim() && allSelectedOptions.length > 0) {
-      // Clear inputs but keep MCQ selections visible
+      // Capture files before clearing UI state
+      const filesToSend = [...uploadedFiles];
+      
+      // Clear inputs immediately
       setInput("");
       setUploadedFiles([]);
       localStorage.removeItem('plc_copilot_uploaded_files');
@@ -938,7 +954,7 @@ export default function PLCCopilotProject() {
           convertStageToApiFormat(currentStage),
           undefined, // no message
           stripped, // mcqResponses
-          undefined, // no files
+          undefined, // no files for MCQ-only submissions
           getPreviousCopilotMessage(), // previous copilot message for context
           sessionId // Pass session ID from URL params
         );
@@ -968,6 +984,14 @@ export default function PLCCopilotProject() {
         
         if (mappedStage !== currentStage) {
           handleStageTransition(mappedStage, 'Backend updated stage');
+        }
+        
+        // Force transition to refinement_testing when backend returns generated code
+        if (response.generated_code && response.generated_code.trim() !== '') {
+          const currentStageAfterBackendUpdate = mappedStage;
+          if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+            handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+          }
         }
         
         // Update progress if provided
@@ -1016,18 +1040,23 @@ export default function PLCCopilotProject() {
     // as additional context but don't duplicate them in the visible user message.
     const visibleContent = input.trim();
 
+    // Capture files before clearing UI state
+    const filesToSend = [...uploadedFiles];
+
     const userMessage: Message = {
       id: Date.now().toString(),
       content: visibleContent,
       role: "user",
       timestamp: new Date(),
-      hasFiles: uploadedFiles.length > 0,
-      attachedFiles: uploadedFiles.map(f => ({ name: f.name, type: f.type }))
+      hasFiles: filesToSend.length > 0,
+      attachedFiles: filesToSend.map(f => ({ name: f.name, type: f.type }))
     };
 
-    // Add only the typed message to the UI
+    // Add only the typed message to the UI and clear inputs immediately
     setMessages(prev => [...prev, userMessage]);
     setInput("");
+    setUploadedFiles([]);
+    localStorage.removeItem('plc_copilot_uploaded_files');
 
     // Log MCQ selections if present (they will be sent to the backend but not shown in the UI)
     if (allSelectedOptions.length > 0) {
@@ -1052,7 +1081,7 @@ export default function PLCCopilotProject() {
         convertStageToApiFormat(currentStage),
         visibleContent,
         stripped.length > 0 ? stripped : undefined, // mcqResponses
-        uploadedFiles.length > 0 ? uploadedFiles.map(f => {
+        filesToSend.length > 0 ? filesToSend.map(f => {
           // Convert UploadedFile to File object for API
           if (!f.content) {
             console.warn('File content missing for:', f.name, '- file will be empty');
@@ -1112,6 +1141,14 @@ export default function PLCCopilotProject() {
         handleStageTransition(mappedStage, 'Backend updated stage');
       }
       
+      // Force transition to refinement_testing when backend returns generated code
+      if (response.generated_code && response.generated_code.trim() !== '') {
+        const currentStageAfterBackendUpdate = mappedStage;
+        if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+          handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+        }
+      }
+      
       // Update progress if provided
       if (response.gathering_requirements_estimated_progress !== undefined) {
         setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
@@ -1150,11 +1187,7 @@ export default function PLCCopilotProject() {
       setIsLoading(false);
       setApiCallInProgress(false);
       
-      // Clear uploaded files after API call completes
-      if (uploadedFiles.length > 0) {
-        setUploadedFiles([]);
-        localStorage.removeItem('plc_copilot_uploaded_files');
-      }
+      // Files are already cleared immediately upon submission
     }
   };
 
@@ -1234,10 +1267,10 @@ export default function PLCCopilotProject() {
     logTerminal(`STAGE: ${currentStage} -> ${newStage}${reason ? ` (${reason})` : ''}`);
     setCurrentStage(newStage);
     
-    // Auto-switch to Structured Text view when entering code generation stage
-    if (newStage === 'code_generation' && activeView !== 'structured-text') {
+    // Auto-switch to Structured Text view when entering code generation or refinement testing stage
+    if ((newStage === 'code_generation' || newStage === 'refinement_testing') && activeView !== 'structured-text') {
       setActiveView('structured-text');
-      logTerminal(`AUTO-SWITCH: View changed to Structured Text for code generation stage`);
+      logTerminal(`AUTO-SWITCH: View changed to Structured Text for ${newStage} stage`);
     }
     
     // Here you could add API calls to update the backend stage
@@ -1623,7 +1656,7 @@ END_PROGRAM`}
                   <div className="text-xs text-gray-500">Use dot notation in name field for hierarchy, e.g. <span className="font-mono">Device.Interface.Type</span></div>
 
                   {projectContext.deviceConstants.length === 0 ? (
-                    <div className="text-gray-500 text-sm mt-3">No device constants gathered yet. Information will be extracted from datasheets and conversations.</div>
+                    <div className="text-gray-500 text-sm mt-3">No device constants found yet. They will be extracted from datasheets and conversations.</div>
                   ) : (
                     <div className="space-y-2">
                       {(() => {
@@ -1767,7 +1800,7 @@ END_PROGRAM`}
                       onClick={() => setIsInformationFocused(true)}
                     >
                       {informationInput.trim() === '' || informationInput === informationPlaceholder ? (
-                        <div className="text-gray-500 text-sm italic">{informationPlaceholder}</div>
+                        <div className="text-gray-500 text-sm">{informationPlaceholder}</div>
                       ) : (
                         <div className="prose prose-invert prose-sm max-w-none">
                           <SafeReactMarkdown
