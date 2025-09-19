@@ -918,15 +918,15 @@ export default function PLCCopilotProject() {
       }
     }
     
-    // Require either text input or MCQ selections
-    if (!input.trim() && allSelectedOptions.length === 0) {
+    // Require either text input, MCQ selections, or uploaded files
+    if (!input.trim() && allSelectedOptions.length === 0 && uploadedFiles.length === 0) {
       return;
     }
     
     if (isLoading) return;
 
     // Handle MCQ-only submissions (no user message created)
-  if (!input.trim() && allSelectedOptions.length > 0) {
+    if (!input.trim() && allSelectedOptions.length > 0 && uploadedFiles.length === 0) {
       // Capture files before clearing UI state
       const filesToSend = [...uploadedFiles];
       
@@ -1854,7 +1854,11 @@ export default function PLCCopilotProject() {
                   <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                     {message.role === "user" ? (
                       <div className="max-w-[85%] rounded-lg px-4 py-3 bg-orange-500 text-white">
-                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        {message.content ? (
+                          <p className="whitespace-pre-wrap">{message.content}</p>
+                        ) : message.hasFiles ? (
+                          <p className="text-sm italic opacity-80">Files uploaded</p>
+                        ) : null}
                         <time className="text-xs opacity-70 mt-1 block">
                           {message.timestamp.toLocaleTimeString()}
                         </time>
@@ -1943,7 +1947,7 @@ export default function PLCCopilotProject() {
                               <button
                                 key={optionIndex}
                                 disabled={!isInteractive}
-                                onClick={() => {
+                                onClick={async () => {
                                   if (!isInteractive) return;
                                   
                                   const currentSelections = selectedMcqOptions[message.id] || [];
@@ -1967,6 +1971,116 @@ export default function PLCCopilotProject() {
                                   }));
                                   
                                   logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
+                                  
+                                  // For single choice MCQs, automatically submit when an option is selected
+                                  if (!message.isMultiSelect && newSelections.length > 0) {
+                                    // Use a short delay to allow UI to update first
+                                    setTimeout(async () => {
+                                      if (isLoading || apiCallInProgress) return;
+                                      
+                                      // Capture files before clearing UI state
+                                      const filesToSend = [...uploadedFiles];
+                                      
+                                      // Clear inputs immediately
+                                      setInput("");
+                                      setUploadedFiles([]);
+                                      localStorage.removeItem('plc_copilot_uploaded_files');
+                                      
+                                      setIsLoading(true);
+                                      setApiCallInProgress(true);
+                                      setLastError(null);
+                                      
+                                      logTerminal(`Auto-submitting single choice MCQ: ${newSelections[0]}`);
+
+                                      try {
+                                        // Construct MCQ selections for API
+                                        const stripped = newSelections.map(o => stripMarkdown(o));
+
+                                        logApiSummary('SEND', `MCQ_AUTO_SUBMIT: ${stripped.join(' ||| ')}`, getCleanedProjectContext(), getPreviousCopilotMessage());
+
+                                        const response: ContextResponse = await apiClient.updateContext(
+                                          getCleanedProjectContext(),
+                                          convertStageToApiFormat(currentStage),
+                                          undefined, // no message
+                                          stripped, // mcqResponses
+                                          undefined, // no files for MCQ-only submissions
+                                          getPreviousCopilotMessage(), // previous copilot message for context
+                                          sessionId // Pass session ID from URL params
+                                        );
+
+                                        logApiSummary('RECV', response.chat_message, response.updated_context);
+
+                                        // Verify session ID
+                                        verifySessionId(response);
+
+                                        // Update context from backend response
+                                        updateContextFromResponse(response);
+                                        
+                                        // Update project context from API response
+                                        setProjectContext(prev => ({
+                                          ...response.updated_context,
+                                          deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+                                        }));
+                                        
+                                        // Update stage if changed
+                                        const stageMapping: Record<string, typeof currentStage> = {
+                                          'gathering_requirements': 'gather_requirements',
+                                          'code_generation': 'code_generation',
+                                          'refinement_testing': 'refinement_testing'
+                                        };
+                                        const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+                                        
+                                        if (mappedStage !== currentStage) {
+                                          handleStageTransition(mappedStage, 'Backend updated stage');
+                                        }
+                                        
+                                        // Force transition to refinement_testing when backend returns generated code
+                                        if (response.generated_code && response.generated_code.trim() !== '') {
+                                          const currentStageAfterBackendUpdate = mappedStage;
+                                          if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+                                            handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+                                          }
+                                        }
+                                        
+                                        // Update progress if provided
+                                        if (response.gathering_requirements_estimated_progress !== undefined) {
+                                          setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
+                                        }
+                                        
+                                        // Check if response contains MCQ and extract options
+                                        const mcqOptions = response.is_mcq ? response.mcq_options : null;
+                                        if (mcqOptions && mcqOptions.length > 0) {
+                                          logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+                                        }
+                                        
+                                        const assistantMessage: Message = {
+                                          id: Date.now().toString(),
+                                          content: response.chat_message,
+                                          role: "assistant",
+                                          timestamp: new Date(),
+                                          mcqOptions: mcqOptions || undefined,
+                                          isMultiSelect: response.is_multiselect
+                                        };
+                                        setMessages(prev => [...prev, assistantMessage]);
+                                        
+                                      } catch (error) {
+                                        console.error('Auto-submit API call failed:', error);
+                                        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                                        setLastError(errorMessage);
+                                        
+                                        const errorResponse: Message = {
+                                          id: Date.now().toString(),
+                                          content: `Error: ${errorMessage}. Please try again.`,
+                                          role: "assistant",
+                                          timestamp: new Date()
+                                        };
+                                        setMessages(prev => [...prev, errorResponse]);
+                                      } finally {
+                                        setIsLoading(false);
+                                        setApiCallInProgress(false);
+                                      }
+                                    }, 100);
+                                  }
                                 }}
                                 className={`px-3 py-2 rounded-lg border text-left transition-colors ${
                                   !isInteractive 
@@ -2098,13 +2212,14 @@ export default function PLCCopilotProject() {
                     try {
                       const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
                       const hasMcqSelection = !Object.values(selectedMcqOptions).every(options => !options || options.length === 0);
-                      // If not mobile, require either text or MCQ selection. On mobile, allow submit when MCQ selections exist even if input is empty.
+                      const hasFiles = uploadedFiles.length > 0;
+                      // If not mobile, require either text, MCQ selection, or files. On mobile, allow submit when MCQ selections or files exist even if input is empty.
                       if (isMobile) {
-                        return !(input.trim() || hasMcqSelection) || isLoading;
+                        return !(input.trim() || hasMcqSelection || hasFiles) || isLoading;
                       }
-                      return (!input.trim() && !hasMcqSelection) || isLoading;
+                      return (!input.trim() && !hasMcqSelection && !hasFiles) || isLoading;
                     } catch {
-                      return (!input.trim() && Object.values(selectedMcqOptions).every(options => !options || options.length === 0)) || isLoading;
+                      return (!input.trim() && Object.values(selectedMcqOptions).every(options => !options || options.length === 0) && uploadedFiles.length === 0) || isLoading;
                     }
                   })()}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -2259,7 +2374,11 @@ export default function PLCCopilotProject() {
                         <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                           {message.role === "user" ? (
                             <div className="max-w-[85%] rounded-lg px-4 py-3 bg-orange-500 text-white">
-                              <p className="whitespace-pre-wrap">{message.content}</p>
+                              {message.content ? (
+                                <p className="whitespace-pre-wrap">{message.content}</p>
+                              ) : message.hasFiles ? (
+                                <p className="text-sm italic opacity-80">Files uploaded</p>
+                              ) : null}
                               <time className="text-xs opacity-70 mt-1 block">
                                 {message.timestamp.toLocaleTimeString()}
                               </time>
@@ -2348,7 +2467,7 @@ export default function PLCCopilotProject() {
                                     <button
                                       key={optionIndex}
                                       disabled={!isInteractive}
-                                      onClick={() => {
+                                      onClick={async () => {
                                         if (!isInteractive) return;
                                         
                                         const currentSelections = selectedMcqOptions[message.id] || [];
@@ -2372,6 +2491,116 @@ export default function PLCCopilotProject() {
                                         }));
                                         
                                         logTerminal(`MCQ selection [${message.id}]: ${newSelections.length > 0 ? newSelections.join(', ') : 'none'}`);
+                                        
+                                        // For single choice MCQs, automatically submit when an option is selected
+                                        if (!message.isMultiSelect && newSelections.length > 0) {
+                                          // Use a short delay to allow UI to update first
+                                          setTimeout(async () => {
+                                            if (isLoading || apiCallInProgress) return;
+                                            
+                                            // Capture files before clearing UI state
+                                            const filesToSend = [...uploadedFiles];
+                                            
+                                            // Clear inputs immediately
+                                            setInput("");
+                                            setUploadedFiles([]);
+                                            localStorage.removeItem('plc_copilot_uploaded_files');
+                                            
+                                            setIsLoading(true);
+                                            setApiCallInProgress(true);
+                                            setLastError(null);
+                                            
+                                            logTerminal(`Auto-submitting single choice MCQ: ${newSelections[0]}`);
+
+                                            try {
+                                              // Construct MCQ selections for API
+                                              const stripped = newSelections.map(o => stripMarkdown(o));
+
+                                              logApiSummary('SEND', `MCQ_AUTO_SUBMIT: ${stripped.join(' ||| ')}`, getCleanedProjectContext(), getPreviousCopilotMessage());
+
+                                              const response: ContextResponse = await apiClient.updateContext(
+                                                getCleanedProjectContext(),
+                                                convertStageToApiFormat(currentStage),
+                                                undefined, // no message
+                                                stripped, // mcqResponses
+                                                undefined, // no files for MCQ-only submissions
+                                                getPreviousCopilotMessage(), // previous copilot message for context
+                                                sessionId // Pass session ID from URL params
+                                              );
+
+                                              logApiSummary('RECV', response.chat_message, response.updated_context);
+
+                                              // Verify session ID
+                                              verifySessionId(response);
+
+                                              // Update context from backend response
+                                              updateContextFromResponse(response);
+                                              
+                                              // Update project context from API response
+                                              setProjectContext(prev => ({
+                                                ...response.updated_context,
+                                                deviceConstants: convertApiFormatToDeviceConstants(response.updated_context.device_constants)
+                                              }));
+                                              
+                                              // Update stage if changed
+                                              const stageMapping: Record<string, typeof currentStage> = {
+                                                'gathering_requirements': 'gather_requirements',
+                                                'code_generation': 'code_generation',
+                                                'refinement_testing': 'refinement_testing'
+                                              };
+                                              const mappedStage = stageMapping[response.current_stage] || response.current_stage as typeof currentStage;
+                                              
+                                              if (mappedStage !== currentStage) {
+                                                handleStageTransition(mappedStage, 'Backend updated stage');
+                                              }
+                                              
+                                              // Force transition to refinement_testing when backend returns generated code
+                                              if (response.generated_code && response.generated_code.trim() !== '') {
+                                                const currentStageAfterBackendUpdate = mappedStage;
+                                                if (currentStageAfterBackendUpdate !== 'refinement_testing') {
+                                                  handleStageTransition('refinement_testing', 'Automatic transition: backend returned generated code');
+                                                }
+                                              }
+                                              
+                                              // Update progress if provided
+                                              if (response.gathering_requirements_estimated_progress !== undefined) {
+                                                setStageProgress({ confidence: response.gathering_requirements_estimated_progress });
+                                              }
+                                              
+                                              // Check if response contains MCQ and extract options
+                                              const mcqOptions = response.is_mcq ? response.mcq_options : null;
+                                              if (mcqOptions && mcqOptions.length > 0) {
+                                                logTerminal(`MCQ detected: ${mcqOptions.length} options [${mcqOptions.map(opt => opt.slice(0, 30)).join(', ')}${mcqOptions.some(opt => opt.length > 30) ? '...' : ''}]`);
+                                              }
+                                              
+                                              const assistantMessage: Message = {
+                                                id: Date.now().toString(),
+                                                content: response.chat_message,
+                                                role: "assistant",
+                                                timestamp: new Date(),
+                                                mcqOptions: mcqOptions || undefined,
+                                                isMultiSelect: response.is_multiselect
+                                              };
+                                              setMessages(prev => [...prev, assistantMessage]);
+                                              
+                                            } catch (error) {
+                                              console.error('Auto-submit API call failed:', error);
+                                              const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                                              setLastError(errorMessage);
+                                              
+                                              const errorResponse: Message = {
+                                                id: Date.now().toString(),
+                                                content: `Error: ${errorMessage}. Please try again.`,
+                                                role: "assistant",
+                                                timestamp: new Date()
+                                              };
+                                              setMessages(prev => [...prev, errorResponse]);
+                                            } finally {
+                                              setIsLoading(false);
+                                              setApiCallInProgress(false);
+                                            }
+                                          }, 100);
+                                        }
                                       }}
                                       className={`px-3 py-2 rounded-lg border text-left transition-colors ${
                                         !isInteractive 
@@ -2535,6 +2764,7 @@ export default function PLCCopilotProject() {
                           try {
                             const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
                             const hasMcqSelection = !Object.values(selectedMcqOptions).every(options => !options || options.length === 0);
+                            const hasFiles = uploadedFiles.length > 0;
 
                             // If editing a file, require file content unless mobile and MCQ selections exist
                             if (selectedFileId) {
@@ -2543,11 +2773,11 @@ export default function PLCCopilotProject() {
                               return !fileContent || isLoading;
                             }
 
-                            // Not editing a file: consider input or MCQ selections
-                            if (isMobile) return !(input.trim() || hasMcqSelection) || isLoading;
-                            return !input.trim() || isLoading;
+                            // Not editing a file: consider input, MCQ selections, or files
+                            if (isMobile) return !(input.trim() || hasMcqSelection || hasFiles) || isLoading;
+                            return (!input.trim() && !hasMcqSelection && !hasFiles) || isLoading;
                           } catch {
-                            return !(selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? '').trim() : input.trim()) || isLoading;
+                            return !(selectedFileId ? (uploadedFiles.find(f => f.id === selectedFileId)?.content ?? '').trim() : (input.trim() || uploadedFiles.length > 0)) || isLoading;
                           }
                         })()}
                         className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
