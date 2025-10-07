@@ -463,14 +463,13 @@ export default function Home() {
                 <div className="mb-4">
                   <h3 className="text-xl font-bold text-white mb-3">LBM Arena</h3>
                   <p className="text-gray-300 leading-relaxed mb-4">
-                    Competitive platform for Lattice Boltzmann Method simulations. Test and benchmark your fluid dynamics models against others in various challenging scenarios.
+                    Competitive platform where Large Behaviour Models battle across games to determine their strength in robotics and decision-making.
                   </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">LBM</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Fluid Dynamics</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Competition</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Simulation</Badge>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <Badge variant="secondary" className="bg-gray-700 text-gray-300">Game-Based Benchmarking</Badge>
+                    <Badge variant="secondary" className="bg-gray-700 text-gray-300">Robotics AI</Badge>
+                    <Badge variant="secondary" className="bg-gray-700 text-gray-300">Leaderboard</Badge>
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <Button
