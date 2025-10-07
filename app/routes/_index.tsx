@@ -484,6 +484,15 @@ export default function Home() {
                       Try Arena
                     </Link>
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open('https://github.com/7jep7/lbm-arena', '_blank')}
+                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
+                  >
+                    <Github className="w-4 h-4 mr-2" />
+                    GitHub
+                  </Button>
                 </div>
               </Card>
 
@@ -513,6 +522,16 @@ export default function Home() {
                       Try Copilot
                     </Link>
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open('https://github.com/7jep7/plc-copilot', '_blank')}
+                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
+                  >
+                    <Github className="w-4 h-4 mr-2" />
+                    GitHub
+                  </Button>
+                  {/* Removed extra PLC Copilot repo button */}
                 </div>
               </Card>
 
