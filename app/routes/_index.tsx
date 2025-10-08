@@ -463,14 +463,13 @@ export default function Home() {
                 <div className="mb-4">
                   <h3 className="text-xl font-bold text-white mb-3">LBM Arena</h3>
                   <p className="text-gray-300 leading-relaxed mb-4">
-                    Competitive platform for Lattice Boltzmann Method simulations. Test and benchmark your fluid dynamics models against others in various challenging scenarios.
+                    Competitive platform where Large Behaviour Models battle across games to determine their strength in robotics and decision-making.
                   </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">LBM</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Fluid Dynamics</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Competition</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Simulation</Badge>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <Badge variant="secondary" className="bg-gray-700 text-gray-300">Game-Based Benchmarking</Badge>
+                    <Badge variant="secondary" className="bg-gray-700 text-gray-300">Robotics AI</Badge>
+                    <Badge variant="secondary" className="bg-gray-700 text-gray-300">Leaderboard</Badge>
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <Button
@@ -483,6 +482,15 @@ export default function Home() {
                       <Play className="w-4 h-4 mr-2" />
                       Try Arena
                     </Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open('https://github.com/7jep7/lbm-arena', '_blank')}
+                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
+                  >
+                    <Github className="w-4 h-4 mr-2" />
+                    GitHub
                   </Button>
                 </div>
               </Card>
@@ -513,6 +521,16 @@ export default function Home() {
                       Try Copilot
                     </Link>
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open('https://github.com/7jep7/plc-copilot', '_blank')}
+                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
+                  >
+                    <Github className="w-4 h-4 mr-2" />
+                    GitHub
+                  </Button>
+                  {/* Removed extra PLC Copilot repo button */}
                 </div>
               </Card>
 
