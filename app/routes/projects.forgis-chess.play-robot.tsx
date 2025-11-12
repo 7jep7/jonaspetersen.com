@@ -28,7 +28,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return json({ checkEmail, ...positionData });
   }
   
-  return json({ checkEmail: null, entry: null, position: null, totalInQueue: 0 });
+  // Always fetch the total queue count even when not checking a specific email
+  const positionData = await getQueuePosition('');
+  return json({ checkEmail: null, entry: null, position: null, totalInQueue: positionData.totalInQueue });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {

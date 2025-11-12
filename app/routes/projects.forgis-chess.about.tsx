@@ -125,6 +125,12 @@ export default function AboutForgis() {
       <main className="flex-1 px-4 sm:px-6 lg:px-8 py-12">
         <div className="max-w-3xl mx-auto space-y-8">
           
+          {/* LinkedIn Button at Top */}
+          <LinkedInButton 
+            variant="default" 
+            customText="Support us for good vibes, tomorrow`s winner announcement and who knows, maybe also your next job ;)"
+          />
+          
           {/* Success Message */}
           {justSubscribed && (
             <Card 
@@ -180,15 +186,11 @@ export default function AboutForgis() {
             }}
           >
             <div className="flex items-start gap-4 mb-6">
-              <div 
-                className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0"
-                style={{ 
-                  backgroundColor: FORGIS_COLORS.fire,
-                  color: FORGIS_COLORS.white
-                }}
-              >
-                F
-              </div>
+              <img 
+                src="/forgis-logo-white.png" 
+                alt="Forgis Logo" 
+                className="w-16 h-16 flex-shrink-0"
+              />
               <div className="flex-1">
                 <h2 className="text-3xl font-bold mb-2" style={{ color: FORGIS_COLORS.white }}>
                   Forgis AI
@@ -242,40 +244,6 @@ export default function AboutForgis() {
                   Zurich-Based
                 </div>
               </div>
-            </div>
-          </Card>
-
-          {/* Website Link */}
-          <Card 
-            className="p-6 border-2"
-            style={{ 
-              backgroundColor: FORGIS_COLORS.gunmetal,
-              borderColor: FORGIS_COLORS.steel,
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Building2 className="w-6 h-6" style={{ color: FORGIS_COLORS.fire }} />
-                <div>
-                  <h3 className="font-semibold" style={{ color: FORGIS_COLORS.white }}>
-                    Visit Our Website
-                  </h3>
-                  <p className="text-sm" style={{ color: FORGIS_COLORS.platinum }}>
-                    Learn more about our technology and solutions
-                  </p>
-                </div>
-              </div>
-              <Button
-                onClick={() => window.open('https://www.forgis.com', '_blank')}
-                style={{
-                  backgroundColor: FORGIS_COLORS.fire,
-                  color: FORGIS_COLORS.white,
-                }}
-                className="hover:bg-[#FF762B]"
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                forgis.com
-              </Button>
             </div>
           </Card>
 
@@ -411,8 +379,33 @@ export default function AboutForgis() {
             )}
           </Card>
 
-          {/* LinkedIn CTA */}
-          <LinkedInButton variant="default" />
+
+          {/* Website Link */}
+          <Card 
+            className="p-6 border-2 cursor-pointer hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
+            style={{ 
+              backgroundColor: FORGIS_COLORS.gunmetal,
+              borderColor: FORGIS_COLORS.steel,
+            }}
+            onClick={() => window.open('https://www.forgis.com', '_blank')}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Building2 className="w-6 h-6" style={{ color: FORGIS_COLORS.fire }} />
+                <div>
+                  <h3 className="font-semibold" style={{ color: FORGIS_COLORS.white }}>
+                    Visit Our Website
+                  </h3>
+                  <p className="text-sm" style={{ color: FORGIS_COLORS.platinum }}>
+                    Learn more about our technology and solutions
+                  </p>
+                </div>
+              </div>
+              <ExternalLink className="w-5 h-5" style={{ color: FORGIS_COLORS.fire }} />
+            </div>
+          </Card>
+
+          
         </div>
       </main>
 

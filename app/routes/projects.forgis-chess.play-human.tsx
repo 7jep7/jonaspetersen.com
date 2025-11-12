@@ -48,8 +48,8 @@ const PRESETS: TimeControl[] = [
 type Player = "white" | "black";
 
 export default function ChessClock() {
-  const [whiteTime, setWhiteTime] = React.useState(300); // seconds (5+0 default)
-  const [blackTime, setBlackTime] = React.useState(300);
+  const [whiteTime, setWhiteTime] = React.useState(300000); // milliseconds (5+0 default)
+  const [blackTime, setBlackTime] = React.useState(300000);
   const [activePlayer, setActivePlayer] = React.useState<Player | null>(null);
   const [increment, setIncrement] = React.useState(0);
   const [soundEnabled, setSoundEnabled] = React.useState(true);
@@ -92,30 +92,30 @@ export default function ChessClock() {
     oscillator.stop(context.currentTime + 0.1);
   }, [soundEnabled]);
 
-  // Timer logic
+  // Timer logic - updates every 100ms for precision
   React.useEffect(() => {
     if (activePlayer && !whiteWon && !blackWon) {
       intervalRef.current = setInterval(() => {
         if (activePlayer === "white") {
           setWhiteTime((prev) => {
-            if (prev <= 1) {
+            if (prev <= 100) {
               setBlackWon(true);
               if (intervalRef.current) clearInterval(intervalRef.current);
               return 0;
             }
-            return prev - 1;
+            return prev - 100;
           });
         } else {
           setBlackTime((prev) => {
-            if (prev <= 1) {
+            if (prev <= 100) {
               setWhiteWon(true);
               if (intervalRef.current) clearInterval(intervalRef.current);
               return 0;
             }
-            return prev - 1;
+            return prev - 100;
           });
         }
-      }, 1000);
+      }, 100);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -137,9 +137,10 @@ export default function ChessClock() {
     }
   }, [whiteWon, blackWon, hasShownLinkedIn, gamesCompleted]);
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+  const formatTime = (milliseconds: number): string => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
@@ -152,11 +153,11 @@ export default function ChessClock() {
       // First move
       setActivePlayer(player === "white" ? "black" : "white");
     } else if (activePlayer === player) {
-      // Add increment to current player
+      // Add increment to current player (convert seconds to milliseconds)
       if (player === "white") {
-        setWhiteTime((prev) => prev + increment);
+        setWhiteTime((prev) => prev + increment * 1000);
       } else {
-        setBlackTime((prev) => prev + increment);
+        setBlackTime((prev) => prev + increment * 1000);
       }
       // Switch to other player
       setActivePlayer(player === "white" ? "black" : "white");
@@ -171,7 +172,7 @@ export default function ChessClock() {
     setActivePlayer(null);
     setWhiteWon(false);
     setBlackWon(false);
-    const initialTime = customMinutes * 60;
+    const initialTime = customMinutes * 60 * 1000; // Convert to milliseconds
     setWhiteTime(initialTime);
     setBlackTime(initialTime);
     setIncrement(customIncrement);
@@ -180,8 +181,8 @@ export default function ChessClock() {
   const applyPreset = (preset: TimeControl) => {
     setCustomMinutes(preset.minutes);
     setCustomIncrement(preset.increment);
-    setWhiteTime(preset.minutes * 60);
-    setBlackTime(preset.minutes * 60);
+    setWhiteTime(preset.minutes * 60 * 1000); // Convert to milliseconds
+    setBlackTime(preset.minutes * 60 * 1000);
     setIncrement(preset.increment);
     setActivePlayer(null);
     setWhiteWon(false);
@@ -190,8 +191,8 @@ export default function ChessClock() {
   };
 
   const applyCustomTime = () => {
-    setWhiteTime(customMinutes * 60);
-    setBlackTime(customMinutes * 60);
+    setWhiteTime(customMinutes * 60 * 1000); // Convert to milliseconds
+    setBlackTime(customMinutes * 60 * 1000);
     setIncrement(customIncrement);
     setActivePlayer(null);
     setWhiteWon(false);
@@ -204,16 +205,16 @@ export default function ChessClock() {
       className="h-screen flex flex-col overflow-hidden"
       style={{ backgroundColor: FORGIS_COLORS.gunmetal }}
     >
-      {/* Header - Compact */}
+      {/* Header - Ultra compact */}
       <header 
-        className="flex-shrink-0 border-b px-4 py-3"
+        className="flex-shrink-0 border-b px-2 py-1"
         style={{ 
           backgroundColor: FORGIS_COLORS.gunmetal,
           borderColor: FORGIS_COLORS.steel + '50'
         }}
       >
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Link to="/projects/forgis-chess">
               <Button
                 variant="outline"
@@ -221,15 +222,16 @@ export default function ChessClock() {
                 style={{
                   borderColor: FORGIS_COLORS.steel,
                   color: FORGIS_COLORS.platinum,
+                  padding: '0.25rem 0.5rem',
+                  fontSize: '0.75rem',
                 }}
                 className="hover:border-[#FF4D00] hover:text-[#FF4D00]"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Back</span>
+                <ArrowLeft className="w-3 h-3" />
               </Button>
             </Link>
             <h1 
-              className="text-lg sm:text-xl font-bold"
+              className="text-sm font-bold"
               style={{ color: FORGIS_COLORS.white }}
             >
               Chess Clock
@@ -397,7 +399,7 @@ export default function ChessClock() {
             <div 
               className="text-5xl sm:text-6xl md:text-7xl font-mono font-bold"
               style={{ 
-                color: whiteTime <= 10 && activePlayer === "white" 
+                color: whiteTime <= 10000 && activePlayer === "white" 
                   ? FORGIS_COLORS.flicker 
                   : FORGIS_COLORS.white
               }}
@@ -458,7 +460,7 @@ export default function ChessClock() {
             <div 
               className="text-5xl sm:text-6xl md:text-7xl font-mono font-bold"
               style={{ 
-                color: blackTime <= 10 && activePlayer === "black" 
+                color: blackTime <= 10000 && activePlayer === "black" 
                   ? FORGIS_COLORS.flicker 
                   : FORGIS_COLORS.white
               }}
@@ -485,15 +487,15 @@ export default function ChessClock() {
         </button>
       </div>
 
-      {/* Controls - Fixed bottom */}
+      {/* Controls - Fixed bottom - Ultra compact */}
       <div 
-        className="flex-shrink-0 border-t p-4"
+        className="flex-shrink-0 border-t px-2 py-1"
         style={{ 
           backgroundColor: FORGIS_COLORS.gunmetal,
           borderColor: FORGIS_COLORS.steel + '50'
         }}
       >
-        <div className="flex flex-wrap gap-2 justify-center items-center mb-3">
+        <div className="flex gap-1 justify-center items-center">
           <Button
             onClick={handlePause}
             disabled={activePlayer === null || whiteWon || blackWon}
@@ -502,11 +504,12 @@ export default function ChessClock() {
             style={{
               borderColor: FORGIS_COLORS.steel,
               color: FORGIS_COLORS.platinum,
+              padding: '0.25rem 0.5rem',
+              fontSize: '0.75rem',
             }}
             className="hover:border-[#FF4D00] hover:text-[#FF4D00] disabled:opacity-30"
           >
-            <Pause className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Pause</span>
+            <Pause className="w-3 h-3" />
           </Button>
           
           <Button
@@ -516,11 +519,12 @@ export default function ChessClock() {
             style={{
               borderColor: FORGIS_COLORS.steel,
               color: FORGIS_COLORS.platinum,
+              padding: '0.25rem 0.5rem',
+              fontSize: '0.75rem',
             }}
             className="hover:border-[#FF4D00] hover:text-[#FF4D00]"
           >
-            <RotateCcw className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Reset</span>
+            <RotateCcw className="w-3 h-3" />
           </Button>
           
           <Button
@@ -530,11 +534,12 @@ export default function ChessClock() {
             style={{
               borderColor: FORGIS_COLORS.steel,
               color: FORGIS_COLORS.platinum,
+              padding: '0.25rem 0.5rem',
+              fontSize: '0.75rem',
             }}
             className="hover:border-[#FF4D00] hover:text-[#FF4D00]"
           >
-            <Settings className="w-4 h-4 sm:mr-2" />
-            <span className="hidden sm:inline">Settings</span>
+            <Settings className="w-3 h-3" />
           </Button>
           
           <Button
@@ -544,31 +549,30 @@ export default function ChessClock() {
             style={{
               borderColor: FORGIS_COLORS.steel,
               color: FORGIS_COLORS.platinum,
+              padding: '0.25rem 0.5rem',
+              fontSize: '0.75rem',
             }}
             className="hover:border-[#FF4D00] hover:text-[#FF4D00]"
           >
             {soundEnabled ? (
-              <Volume2 className="w-4 h-4 sm:mr-2" />
+              <Volume2 className="w-3 h-3" />
             ) : (
-              <VolumeX className="w-4 h-4 sm:mr-2" />
+              <VolumeX className="w-3 h-3" />
             )}
-            <span className="hidden sm:inline">Sound</span>
           </Button>
-        </div>
-
-        {/* Time Control Info */}
-        <div className="text-center mb-3">
-          <p className="text-xs" style={{ color: FORGIS_COLORS.platinum }}>
+          
+          {/* Time Control Info - Inline */}
+          <span className="text-xs ml-2" style={{ color: FORGIS_COLORS.platinum }}>
             <span className="font-mono" style={{ color: FORGIS_COLORS.fire }}>{customMinutes}min</span>
             {customIncrement > 0 && (
-              <> + <span className="font-mono" style={{ color: FORGIS_COLORS.fire }}>{customIncrement}s</span></>
+              <>+<span className="font-mono" style={{ color: FORGIS_COLORS.fire }}>{customIncrement}s</span></>
             )}
-          </p>
+          </span>
         </div>
 
         {/* LinkedIn Button - Subtle, appears after first game */}
         {hasShownLinkedIn && (
-          <div className="mt-4">
+          <div className="mt-2">
             <LinkedInButton variant="subtle" autoShow={gamesCompleted === 1} />
           </div>
         )}
