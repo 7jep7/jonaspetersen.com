@@ -4,10 +4,21 @@ import { json, redirect, type MetaFunction, type ActionFunctionArgs, type Loader
 import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
-import { ArrowLeft, CheckCircle2, AlertCircle, Loader2, Trophy } from "lucide-react";
+import { ArrowLeft, CheckCircle2, AlertCircle, Loader2, Trophy, Heart } from "lucide-react";
 import { FORGIS_COLORS } from "~/utils/forgis-colors";
 import { getQueuePosition, registerInQueue, unregisterFromQueue } from "~/lib/supabase.server";
 import { LinkedInButton } from "~/components/forgis/LinkedInButton";
+
+// LinkedIn brand color and logo
+const LINKEDIN_BLUE = "#0A66C2";
+
+function LinkedInLogoSmall({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+    </svg>
+  );
+}
 
 export const meta: MetaFunction = () => {
   return [
@@ -93,6 +104,7 @@ export default function PlayRobot() {
   const navigation = useNavigation();
   const [showUnregisterConfirm, setShowUnregisterConfirm] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<'register' | 'check'>('register');
+  const [showLinkedInPrompt, setShowLinkedInPrompt] = React.useState(false);
 
   const isSubmitting = navigation.state === 'submitting';
   const isRegistered = loaderData.entry !== null;
@@ -104,11 +116,79 @@ export default function PlayRobot() {
   const justRegistered = urlParams?.get('registered') === 'true';
   const justUnregistered = urlParams?.get('unregistered') === 'true';
 
+  // Show LinkedIn prompt after registration
+  React.useEffect(() => {
+    if (justRegistered) {
+      setShowLinkedInPrompt(true);
+    }
+  }, [justRegistered]);
+
+  const handleLinkedInPromptClose = () => {
+    setShowLinkedInPrompt(false);
+  };
+
+  const handleLinkedInFollow = () => {
+    window.open('https://www.linkedin.com/company/forgisai', '_blank');
+    handleLinkedInPromptClose();
+  };
+
   return (
     <div 
       className="min-h-screen flex flex-col"
       style={{ backgroundColor: FORGIS_COLORS.gunmetal }}
     >
+      {/* LinkedIn Prompt - After Registration Overlay */}
+      {showLinkedInPrompt && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
+          onClick={handleLinkedInPromptClose}
+        >
+          <Card 
+            className="p-8 max-w-md w-full border-2"
+            style={{ 
+              backgroundColor: FORGIS_COLORS.gunmetal,
+              borderColor: LINKEDIN_BLUE,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center space-y-6">
+              <div 
+                className="w-16 h-16 mx-auto rounded-full flex items-center justify-center"
+                style={{ backgroundColor: LINKEDIN_BLUE }}
+              >
+                <LinkedInLogoSmall className="w-8 h-8 text-white" />
+              </div>
+              
+              <h2 className="text-2xl font-bold" style={{ color: FORGIS_COLORS.white }}>
+                Show Your Support
+              </h2>
+              
+              <p className="text-base leading-relaxed" style={{ color: FORGIS_COLORS.platinum }}>
+                If you like this event, please show your support by taking 5s to give our LinkedIn a follow.
+              </p>
+              
+              <p className="text-sm leading-relaxed flex items-center justify-center gap-2" style={{ color: FORGIS_COLORS.platinum }}>
+                Good vibes only, tomorrow's winner announcement and maybe your next job
+                <Heart className="w-4 h-4" style={{ color: FORGIS_COLORS.fire, fill: FORGIS_COLORS.fire }} />
+              </p>
+              
+              <Button
+                onClick={handleLinkedInFollow}
+                className="w-full"
+                style={{
+                  backgroundColor: LINKEDIN_BLUE,
+                  color: 'white',
+                }}
+              >
+                <LinkedInLogoSmall className="w-5 h-5 mr-2" />
+                Follow Forgis on LinkedIn
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Header */}
       <header 
         className="border-b"

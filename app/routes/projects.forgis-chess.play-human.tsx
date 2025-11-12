@@ -86,9 +86,9 @@ export default function ChessClock() {
     }
   }, []);
 
-  // Check if LinkedIn prompt should be shown on mount
+  // Check if LinkedIn prompt should be shown on mount (session-only)
   React.useEffect(() => {
-    const hasSeenPrompt = localStorage.getItem('forgis-chess-linkedin-prompt-seen');
+    const hasSeenPrompt = sessionStorage.getItem('forgis-chess-linkedin-prompt-seen');
     if (!hasSeenPrompt) {
       setShowLinkedInPrompt(true);
     } else {
@@ -99,7 +99,7 @@ export default function ChessClock() {
   const handleLinkedInPromptClose = () => {
     setShowLinkedInPrompt(false);
     setLinkedInPromptDismissed(true);
-    localStorage.setItem('forgis-chess-linkedin-prompt-seen', 'true');
+    sessionStorage.setItem('forgis-chess-linkedin-prompt-seen', 'true');
   };
 
   const handleLinkedInFollow = () => {
@@ -107,24 +107,40 @@ export default function ChessClock() {
     handleLinkedInPromptClose();
   };
 
-  // Play beep sound
+  // Play clack sound (chess clock button press)
   const playBeep = React.useCallback(() => {
     if (!soundEnabled || !audioContextRef.current) return;
     
     const context = audioContextRef.current;
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
     
-    oscillator.connect(gainNode);
+    // Create a sharp, percussive "clack" sound using white noise
+    const bufferSize = context.sampleRate * 0.05; // 50ms
+    const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    // Generate white noise and shape it
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1));
+    }
+    
+    const noise = context.createBufferSource();
+    noise.buffer = buffer;
+    
+    const filter = context.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1500; // Higher frequency for sharper click
+    filter.Q.value = 2;
+    
+    const gainNode = context.createGain();
+    gainNode.gain.setValueAtTime(1.5, context.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.05);
+    
+    noise.connect(filter);
+    filter.connect(gainNode);
     gainNode.connect(context.destination);
     
-    oscillator.frequency.value = 800;
-    oscillator.type = "sine";
-    gainNode.gain.setValueAtTime(0.3, context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.1);
-    
-    oscillator.start(context.currentTime);
-    oscillator.stop(context.currentTime + 0.1);
+    noise.start(context.currentTime);
+    noise.stop(context.currentTime + 0.05);
   }, [soundEnabled]);
 
   // Timer logic - updates every 100ms for precision
@@ -322,14 +338,6 @@ export default function ChessClock() {
                 <LinkedInLogoSmall className="w-5 h-5 mr-2" />
                 Follow Forgis on LinkedIn
               </Button>
-              
-              <button
-                onClick={handleLinkedInPromptClose}
-                className="text-sm underline"
-                style={{ color: FORGIS_COLORS.steel }}
-              >
-                Maybe later
-              </button>
             </div>
           </Card>
         </div>
