@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Form, Link, useActionData, useNavigation } from "@remix-run/react";
+import { Form, Link, useActionData, useNavigation, useSearchParams } from "@remix-run/react";
 import { json, redirect, type MetaFunction, type ActionFunctionArgs } from "@remix-run/node";
 import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -83,10 +83,10 @@ export default function AboutForgis() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === 'submitting';
+  const [searchParams] = useSearchParams();
 
   // Check if just subscribed
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const justSubscribed = urlParams?.get('subscribed') === 'true';
+  const justSubscribed = searchParams.get('subscribed') === 'true';
 
   // LinkedIn prompt overlay state
   const [showLinkedInPrompt, setShowLinkedInPrompt] = React.useState(false);

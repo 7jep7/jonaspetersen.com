@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
+import { Form, Link, useActionData, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import { json, redirect, type MetaFunction, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -110,11 +110,11 @@ export default function PlayRobot() {
   const isRegistered = loaderData.entry !== null;
   const position = loaderData.position;
   const totalInQueue = loaderData.totalInQueue;
+  const [searchParams] = useSearchParams();
 
   // Check if just registered
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const justRegistered = urlParams?.get('registered') === 'true';
-  const justUnregistered = urlParams?.get('unregistered') === 'true';
+  const justRegistered = searchParams.get('registered') === 'true';
+  const justUnregistered = searchParams.get('unregistered') === 'true';
 
   // Show LinkedIn prompt after registration
   React.useEffect(() => {
