@@ -1,12 +1,20 @@
 import * as React from "react";
-import { Form, Link, useActionData, useNavigation } from "@remix-run/react";
+import { Form, Link, useActionData, useNavigation, useSearchParams } from "@remix-run/react";
 import { json, redirect, type MetaFunction, type ActionFunctionArgs } from "@remix-run/node";
 import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
-import { ArrowLeft, ExternalLink, CheckCircle2, AlertCircle, Loader2, Building2, Briefcase } from "lucide-react";
+import { ArrowLeft, ExternalLink, CheckCircle2, AlertCircle, Loader2, Building2, Briefcase, Heart } from "lucide-react";
 import { FORGIS_COLORS } from "~/utils/forgis-colors";
 import { supabase } from "~/lib/supabase.server";
 import { LinkedInButton } from "~/components/forgis/LinkedInButton";
+
+const LINKEDIN_BLUE = '#0A66C2';
+
+const LinkedInLogoSmall = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+  </svg>
+);
 
 export const meta: MetaFunction = () => {
   return [
@@ -75,16 +83,87 @@ export default function AboutForgis() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === 'submitting';
+  const [searchParams] = useSearchParams();
 
   // Check if just subscribed
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const justSubscribed = urlParams?.get('subscribed') === 'true';
+  const justSubscribed = searchParams.get('subscribed') === 'true';
+
+  // LinkedIn prompt overlay state
+  const [showLinkedInPrompt, setShowLinkedInPrompt] = React.useState(false);
+
+  // Show LinkedIn prompt when user subscribes
+  React.useEffect(() => {
+    if (justSubscribed) {
+      setShowLinkedInPrompt(true);
+    }
+  }, [justSubscribed]);
+
+  const handleLinkedInPromptClose = () => {
+    setShowLinkedInPrompt(false);
+  };
+
+  const handleLinkedInFollow = () => {
+    window.open('https://www.linkedin.com/company/forgisai', '_blank');
+    setShowLinkedInPrompt(false);
+  };
 
   return (
     <div 
       className="min-h-screen flex flex-col"
       style={{ backgroundColor: FORGIS_COLORS.gunmetal }}
     >
+      {/* LinkedIn Prompt - After Newsletter Subscription Overlay */}
+      {showLinkedInPrompt && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
+          onClick={handleLinkedInPromptClose}
+        >
+          <Card 
+            className="p-8 max-w-md w-full border-2"
+            style={{ 
+              backgroundColor: FORGIS_COLORS.gunmetal,
+              borderColor: LINKEDIN_BLUE,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center space-y-6">
+              <div 
+                className="w-16 h-16 mx-auto rounded-full flex items-center justify-center"
+                style={{ backgroundColor: LINKEDIN_BLUE }}
+              >
+                <LinkedInLogoSmall className="w-8 h-8 text-white" />
+              </div>
+              
+              <h2 className="text-2xl font-bold" style={{ color: FORGIS_COLORS.white }}>
+                Show Your Support
+              </h2>
+              
+              <p className="text-base leading-relaxed" style={{ color: FORGIS_COLORS.platinum }}>
+                If you like this event, please show your support by taking 5s to give our LinkedIn a follow.
+              </p>
+              
+              <p className="text-sm leading-relaxed flex items-center justify-center gap-2" style={{ color: FORGIS_COLORS.platinum }}>
+                Good vibes only, tomorrow's winner announcement and maybe your next job
+                <Heart className="w-4 h-4" style={{ color: FORGIS_COLORS.fire, fill: FORGIS_COLORS.fire }} />
+              </p>
+              
+              <Button
+                onClick={handleLinkedInFollow}
+                className="w-full"
+                style={{
+                  backgroundColor: LINKEDIN_BLUE,
+                  color: 'white',
+                }}
+              >
+                <LinkedInLogoSmall className="w-5 h-5 mr-2" />
+                Follow Forgis on LinkedIn
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Header */}
       <header 
         className="border-b"
@@ -124,6 +203,12 @@ export default function AboutForgis() {
       {/* Main Content */}
       <main className="flex-1 px-4 sm:px-6 lg:px-8 py-12">
         <div className="max-w-3xl mx-auto space-y-8">
+          
+          {/* LinkedIn Button at Top */}
+          <LinkedInButton 
+            variant="default" 
+            customText="Support us for good vibes, tomorrow`s winner announcement and who knows, maybe also your next job ;)"
+          />
           
           {/* Success Message */}
           {justSubscribed && (
@@ -180,15 +265,11 @@ export default function AboutForgis() {
             }}
           >
             <div className="flex items-start gap-4 mb-6">
-              <div 
-                className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0"
-                style={{ 
-                  backgroundColor: FORGIS_COLORS.fire,
-                  color: FORGIS_COLORS.white
-                }}
-              >
-                F
-              </div>
+              <img 
+                src="/forgis-logo-white.png" 
+                alt="Forgis Logo" 
+                className="w-16 h-16 flex-shrink-0"
+              />
               <div className="flex-1">
                 <h2 className="text-3xl font-bold mb-2" style={{ color: FORGIS_COLORS.white }}>
                   Forgis AI
@@ -242,40 +323,6 @@ export default function AboutForgis() {
                   Zurich-Based
                 </div>
               </div>
-            </div>
-          </Card>
-
-          {/* Website Link */}
-          <Card 
-            className="p-6 border-2"
-            style={{ 
-              backgroundColor: FORGIS_COLORS.gunmetal,
-              borderColor: FORGIS_COLORS.steel,
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Building2 className="w-6 h-6" style={{ color: FORGIS_COLORS.fire }} />
-                <div>
-                  <h3 className="font-semibold" style={{ color: FORGIS_COLORS.white }}>
-                    Visit Our Website
-                  </h3>
-                  <p className="text-sm" style={{ color: FORGIS_COLORS.platinum }}>
-                    Learn more about our technology and solutions
-                  </p>
-                </div>
-              </div>
-              <Button
-                onClick={() => window.open('https://www.forgis.com', '_blank')}
-                style={{
-                  backgroundColor: FORGIS_COLORS.fire,
-                  color: FORGIS_COLORS.white,
-                }}
-                className="hover:bg-[#FF762B]"
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                forgis.com
-              </Button>
             </div>
           </Card>
 
@@ -411,8 +458,33 @@ export default function AboutForgis() {
             )}
           </Card>
 
-          {/* LinkedIn CTA */}
-          <LinkedInButton variant="default" />
+
+          {/* Website Link */}
+          <Card 
+            className="p-6 border-2 cursor-pointer hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
+            style={{ 
+              backgroundColor: FORGIS_COLORS.gunmetal,
+              borderColor: FORGIS_COLORS.steel,
+            }}
+            onClick={() => window.open('https://www.forgis.com', '_blank')}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Building2 className="w-6 h-6" style={{ color: FORGIS_COLORS.fire }} />
+                <div>
+                  <h3 className="font-semibold" style={{ color: FORGIS_COLORS.white }}>
+                    Visit Our Website
+                  </h3>
+                  <p className="text-sm" style={{ color: FORGIS_COLORS.platinum }}>
+                    Learn more about our technology and solutions
+                  </p>
+                </div>
+              </div>
+              <ExternalLink className="w-5 h-5" style={{ color: FORGIS_COLORS.fire }} />
+            </div>
+          </Card>
+
+          
         </div>
       </main>
 
