@@ -1,132 +1,28 @@
-import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { Link } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { 
   Download, 
-  Github, 
   Linkedin, 
-  Instagram, 
-  ExternalLink, 
-  FileText, 
-  Youtube, 
-  Camera,
-  Star,
-  Play
+  Star
 } from "lucide-react";
 import type { MetaFunction } from "@remix-run/node";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Jonas Petersen - AI Engineer & Robotics Researcher" },
-    { name: "description", content: "Computational engineer with AI/robotics expertise. Co-founded and scaled AI startup to €500k revenue. Cambridge MPhil, Imperial MEng. Building the future of human-robot interaction." },
-    { name: "keywords", content: "AI, Robotics, Machine Learning, Reinforcement Learning, Engineer, Startup Founder" },
-    { property: "og:title", content: "Jonas Petersen - AI Engineer & Robotics Researcher" },
-    { property: "og:description", content: "Computational engineer with AI/robotics expertise. Co-founded and scaled AI startup to €500k revenue. Cambridge MPhil, Imperial MEng. Building the future of human-robot interaction." },
+    { title: "Calum Steer - Development & Conservation Professional" },
+    { name: "description", content: "Programme Officer for environmental conservation and sustainable livelihoods at SEED Madagascar. MPhil Development Studies, Cambridge. Passionate about sustainable development, migration, investigative journalism and compassion in politics." },
+    { name: "keywords", content: "Development Studies, Conservation, Sustainable Development, SEED Madagascar, Marine Conservation, Migration, Cambridge" },
+    { property: "og:title", content: "Calum Steer - Development & Conservation Professional" },
+    { property: "og:description", content: "Programme Officer for environmental conservation and sustainable livelihoods at SEED Madagascar. MPhil Development Studies, Cambridge. Passionate about sustainable development and social justice." },
     { property: "og:type", content: "website" },
-    { property: "og:url", content: "https://jonaspetersen.com" },
+    { property: "og:url", content: "https://calumsteer.com" },
     { name: "twitter:card", content: "summary_large_image" },
-    { name: "twitter:title", content: "Jonas Petersen - AI Engineer & Robotics Researcher" },
-    { name: "twitter:description", content: "Computational engineer with AI/robotics expertise. Co-founded and scaled AI startup to €500k revenue. Cambridge MPhil, Imperial MEng. Building the future of human-robot interaction." },
+    { name: "twitter:title", content: "Calum Steer - Development & Conservation Professional" },
+    { name: "twitter:description", content: "Programme Officer for environmental conservation and sustainable livelihoods at SEED Madagascar. MPhil Development Studies, Cambridge. Passionate about sustainable development and social justice." },
   ];
 };
-
-interface Project {
-  title: string;
-  description: string;
-  skills: string[];
-  buttons: Array<{
-    label: string;
-    icon: any;
-    href?: string;
-    variant?: "default" | "secondary" | "outline";
-  }>;
-  featured?: boolean;
-  size?: "large" | "small";
-}
-
-const projects: Project[] = [
-  {
-    title: "human2robot",
-    description: "Coordination and data layer for the robotic age. Training data platform using imitation learning from human hand video recordings. Won 2 hackathons and secured YC interview.",
-    skills: ["Python", "ROS", "Isaac Lab", "SO-101 Manipulator", "Computer Vision"],
-    featured: true,
-    size: "large",
-    buttons: [
-      { label: "GitHub", icon: Github, href: "https://github.com/7jep7/human2robot", variant: "default" as const },
-      { label: "Website", icon: ExternalLink, href: "https://www.l5e.xyz", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "LBM Arena",
-    description: "Competitive benchmarking platform where Large Behaviour Models compete across games to determine their relative strength. Solving the reproducibility crisis in robotics AI evaluation.",
-    skills: ["Game Theory", "Model Evaluation", "Competition Platform", "Benchmarking"],
-    featured: true,
-    size: "large",
-    buttons: [
-      { label: "Visit Arena", icon: ExternalLink, href: "/projects/lbm-arena", variant: "default" as const },
-      { label: "Submit Model", icon: Star, href: "/projects/lbm-arena#submit", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "PLC Copilot",
-    description: "AI-powered assistant for industrial automation and PLC programming. Expert guidance on control systems, structured text programming, and industrial protocols using GPT-4o.",
-    skills: ["PLC Programming", "Industrial AI", "Automation", "GPT-4o"],
-    featured: true,
-    size: "large",
-    buttons: [
-      { label: "Try Copilot", icon: Play, href: "/projects/plc-copilot", variant: "default" as const }
-    ]
-  },
-  {
-    title: "K2 AI",
-    description: "Co-founded AI startup, scaled to 10 employees and >€500k revenue. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.",
-    skills: ["LLMs", "SaaS", "AI Automation"],
-    size: "large",
-    buttons: [
-      { label: "LinkedIn", icon: Linkedin, href: "https://www.linkedin.com/company/100340844", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "Reinforcement Learning Projects",
-    description: "Reinforcement learning implementations including Monte Carlo Tree Search for wildfire suppression and autonomous control systems.",
-    skills: ["PyTorch", "Reinforcement Learning", "OpenAI Gym", "ROS", "Isaac Lab"],
-    size: "small",
-    buttons: [
-      { label: "GitHub", icon: Github, href: "https://github.com/7jep7/RL-Projects", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "Wildfire Suppression Model",
-    description: "Master thesis project developing MDP wildfire model with Monte-Carlo Tree Search optimization. Published first-author paper in Combustion Science & Technology.",
-    skills: ["MCTS", "Optimization", "Research"],
-    size: "small",
-    buttons: [
-      { label: "Paper", icon: FileText, href: "https://drive.google.com/file/d/1XPphLHcbn0c3HYzP-rjMFvPR8HTJrSiZ/view?usp=drive_link", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "Biomechanical Exoskeleton",
-    description: "Gravity-compensating shoulder exoskeleton for Long-COVID patients. Built with Arduino Mega, PID control, and conducted user testing.",
-    skills: ["Arduino", "PID Control", "Biomechanics"],
-    size: "small",
-    buttons: [
-      { label: "Demo", icon: Youtube, variant: "outline" as const }
-    ]
-  },
-  {
-    title: "Photos from Stratosphere",
-    description: "High-altitude photography project capturing stunning images from the stratosphere using weather balloons and custom camera systems. Engineering challenge combining electronics, atmospheric physics, and photography.",
-    skills: ["Electronics", "Photography", "Atmospheric Physics"],
-    size: "small",
-    buttons: [
-      { label: "Video", icon: Youtube, href: "https://www.youtube.com/watch?v=IPa6hRWRHTM", variant: "outline" as const },
-      { label: "Kickstarter", icon: ExternalLink, href: "https://www.kickstarter.com/projects/gordonkoehn/caelum-photos-from-stratosphere", variant: "outline" as const }
-    ]
-  }
-];
 
 export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -148,17 +44,7 @@ export default function Home() {
     // Create a link to download the CV
     const link = document.createElement('a');
     link.href = '/cv.pdf';
-    link.download = 'Jonas_Petersen_CV.pdf';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleDownloadPresentation = () => {
-    // Create a link to download the exoskeleton presentation
-    const link = document.createElement('a');
-    link.href = '/exoskeleton-presentation.pdf';
-    link.download = 'Exoskeleton_Presentation_Jonas_Petersen.pdf';
+    link.download = 'Calum_Steer_CV.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -175,7 +61,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2">
             <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">JP</span>
+              <span className="text-white font-bold text-lg">CS</span>
             </div>
           </div>
           <Button 
@@ -200,24 +86,15 @@ export default function Home() {
               <div className="relative mb-6">
                 <div className="w-48 h-48 rounded-full p-0.5 bg-white">
                   <img 
-                  src="/LinkedIn profile pic - shirt.png" 
-                  alt="Jonas Petersen" 
+                  src="/calum-profile.jpg" 
+                  alt="Calum Steer" 
                   className="w-full h-full rounded-full object-cover"
                   />
                 </div>
               </div>
               <div className="flex justify-center space-x-6 md:mt-auto">
                 <a 
-                  href="https://github.com/7jep7" 
-                  className="flex items-center space-x-2 text-gray-400 hover:text-orange-500 transition-colors duration-200"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Github className="w-5 h-5" />
-                  <span className="text-sm font-medium">GitHub</span>
-                </a>
-                <a 
-                  href="https://linkedin.com/in/jep7" 
+                  href="https://www.linkedin.com/in/calum-steer-8460b0149" 
                   className="flex items-center space-x-2 text-gray-400 hover:text-orange-500 transition-colors duration-200"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -231,17 +108,17 @@ export default function Home() {
             {/* Text Content */}
             <div className="md:col-span-8 text-center md:text-left flex flex-col">
               <h1 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight bg-gradient-to-r from-white via-orange-400 to-orange-600 bg-clip-text text-transparent">
-                Hi, I'm Jonas
+                Hi, I'm Calum
               </h1>
                 <p className="text-xl md:text-2xl text-gray-300 leading-relaxed mb-8 md:mb-0">
-                  Computational engineer with AI and robotics expertise.
-                  Co-founder who scaled a startup to €500k revenue.
-                  Educated at Imperial College and Cambridge University.&nbsp;
-                    Building the data pipelines for shipping{" "}
+                  Programme Officer working on environmental conservation and sustainable livelihoods in Madagascar.
+                  MPhil in Development Studies from Cambridge University.
+                  First-class Geography degree from Durham University.&nbsp;
+                    Passionate about{" "}
                     <span className="bg-orange-400 rounded px-1 font-bold" style={{ lineHeight: "1.5", paddingTop: "0.1em", paddingBottom: "0.1em" }}>
-                      true robotic intelligence
+                      sustainable development
                     </span>
-                    .
+                    {" "}and social justice.
                 </p>
             </div>
           </div>
@@ -254,318 +131,153 @@ export default function Home() {
               <h2 className="text-3xl font-bold text-white mb-6">About Me</h2>
                             <div className="space-y-4 text-gray-300 leading-relaxed">
                 <p>
-                  I'm a German engineer and founder drawn to <strong>embodied AI</strong>, where robots learn to move and think like humans. 
-                  My work spans from <strong>creating advanced robotics systems</strong> to innovative AI solutions that solve real-world problems.
+                  I'm a Programme Officer for <strong>environmental conservation and sustainable livelihoods</strong> at SEED Madagascar. 
+                  I work with small-scale fishing communities in southeast Madagascar, supporting them to manage their marine environment 
+                  through <strong>Locally Managed Marine Areas</strong>, promoting both prosperity and sustainability.
                 </p>
                 <p>
-                  With a background in <strong>mechanical engineering and computing</strong>, I've led projects ranging from biomechanical 
-                  exoskeletons to <strong>reinforcement learning training data pipelines</strong>. I co-founded and scaled a tech startup to 
-                    {" "}<strong>€500k in revenues</strong>, less than 12 months out of uni.
+                  With an <strong>MPhil in Development Studies from Cambridge University</strong> and a <strong>first-class Geography degree 
+                  from Durham University</strong>, I bring academic rigor to real-world development challenges. My experience spans the relief 
+                  and development sectors, including work with <strong>UNRWA</strong> supporting Gaza emergency response and gender-based violence prevention, 
+                  and as a caseworker helping asylum-seekers in the UK.
                 </p>
                 <p>
-                  To me, solving embodied AI is the most challenging and enticing problem of our time.
-                  Humanity is on track to be <strong>100M workers short by 2030</strong> alone due to our post-modern ageing society. 
-                  Embodied AI can fix this. And I would like my future family to live a life as beautiful and better than 
-                  what I am so grateful for living today. Extremely excited to be alive right now and make a dent!
+                  I'm passionate about <strong>sustainable development, migration, investigative journalism, and compassion in politics</strong>. 
+                  I believe in the interconnected nature of global challenges—from corporate accountability abroad to migration policy at home—and 
+                  the importance of international cooperation in addressing them. Through my work, I strive to support communities in building 
+                  sustainable, dignified livelihoods while preserving the environment for future generations.
                 </p>
               </div>
             </Card>
           </div>
         </section>
 
-        {/* Simple Projects Section */}
+        {/* Experience Section */}
         <section className="max-w-4xl mx-auto px-6 pb-16">
-          <h2 className="text-3xl font-bold text-white mb-12 text-center">Projects</h2>
+          <h2 className="text-3xl font-bold text-white mb-12 text-center">Experience & Projects</h2>
           
           <div className="space-y-8">
-            {/* human2robot - Featured */}
+            {/* SEED Madagascar - Featured */}
             <Card className="bg-gray-800 border-gray-700 p-8 relative">
               <div className="absolute -top-3 left-8">
                 <Badge className="bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide">
                   <Star className="w-3 h-3 mr-1" />
-                  Featured
+                  Current Role
                 </Badge>
               </div>
               <div className="mb-6">
-                <h3 className="text-2xl font-bold text-white mb-3">human2robot</h3>
-                <p className="text-white leading-relaxed mb-4">
-                  Coordination and data layer for the robotic age. Training data platform using imitation learning from human hand video recordings.&nbsp;
-                  <a
-                  href="https://www.linkedin.com/posts/jep7_rl-imitation-learning-activity-7345208378501062657-ga36?utm_source=share&utm_medium=member_desktop&rcm=ACoAACBDePQBszetOjFm1YJUCXql69BtJb6OTaY"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-white underline hover:text-orange-500"
-                  >
-                  Won 2 hackathons
-                  </a>
-                  &nbsp;and secured YC interview.
+                <h3 className="text-2xl font-bold text-white mb-3">Programme Officer - Rural Livelihoods</h3>
+                <p className="text-orange-400 font-medium mb-3">SEED Madagascar · Sep 2024 - Present</p>
+                <p className="text-gray-300 leading-relaxed mb-4">
+                  Supporting small-scale fishing communities in southeast Madagascar through the Oratsimba project. 
+                  By establishing Locally Managed Marine Areas (LMMAs), I help communities manage their marine environment, 
+                  promoting both prosperity and environmental sustainability. Work involves community engagement, 
+                  conservation planning, and sustainable livelihood development.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 mb-6">
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Python</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">ROS</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Imitation Learning</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Isaac Gym</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">SO-101 Manipulator</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Computer Vision</Badge>
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  asChild
-                  variant="default"
-                  size="sm"
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
-                >
-                  <Link to="/projects/hand-teleop">
-                    <Play className="w-4 h-4 mr-2" />
-                    Live Demo
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://github.com/7jep7/human2robot', '_blank')}
-                  className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                >
-                  <Github className="w-4 h-4 mr-2" />
-                  GitHub
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://www.l5e.xyz', '_blank')}
-                  className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Website
-                </Button>
+                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Marine Conservation</Badge>
+                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Community Development</Badge>
+                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Sustainable Livelihoods</Badge>
+                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Cross-Cultural Communication</Badge>
               </div>
             </Card>
 
-            {/* K2 AI */}
+            {/* UNRWA */}
             <Card className="bg-gray-800 border-gray-700 p-8">
               <div className="mb-6">
-                <h3 className="text-2xl font-bold text-white mb-3">K2 AI</h3>
+                <h3 className="text-2xl font-bold text-white mb-3">Intern - Emergency Response Support and Gender Division</h3>
+                <p className="text-orange-400 font-medium mb-3">UNRWA · May 2024 - Sep 2024</p>
                 <p className="text-gray-300 leading-relaxed mb-4">
-                  Co-founded AI startup, scaled to 10 employees and &gt;€500k revenue. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.
+                  Supported Gaza emergency response operations and contributed to a major UNRWA report on gender-based violence. 
+                  Participated in GBV workshop planning sessions and provided critical research and editorial support during a period of humanitarian crisis.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 mb-6">
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">SLMs</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Enterprise Sales</Badge>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Leadership</Badge>
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://www.linkedin.com/company/100340844', '_blank')}
-                  className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                >
-                  <Linkedin className="w-4 h-4 mr-2" />
-                  LinkedIn
-                </Button>
+                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Emergency Response</Badge>
+                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Gender-Based Violence</Badge>
+                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Research</Badge>
+                <Badge variant="secondary" className="bg-gray-700 text-gray-300">Humanitarian Aid</Badge>
               </div>
             </Card>
 
-            {/* Small Projects Grid */}
+            {/* Additional Experience Grid */}
             <div className="grid md:grid-cols-2 gap-8">
-              {/* RL Projects */}
+              {/* Teaching */}
               <Card className="bg-gray-800 border-gray-700 p-6 h-full">
                 <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">RL Projects</h3>
-                    <p className="text-white leading-relaxed mb-4">
-                      This repository showcases my reinforcement learning expertise through projects like CartPole DQN, MuJoCo PPO/SAC, an Othello RL agent, and a Tesla Optimus-inspired robotic system, earning{" "}
-                      <a 
-                        href="https://roboinnovate.mirmi.tum.de/roboinnovate-hackathon-2025/" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="text-white underline hover:text-orange-500"
-                      >
-                        2nd place with ExVo at Robo Innovate 2025
-                      </a>
-                      , Germany's largest robotics hackathon.
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">PyTorch</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Reinforcement Learning</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">OpenAI Gym</Badge>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://github.com/7jep7/RL-Projects', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <Github className="w-4 h-4 mr-2" />
-                    GitHub
-                  </Button>
-                </div>
-              </Card>
-
-              {/* Wildfire Suppression Model */}
-              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">Wildfire Suppression Model</h3>
+                  <h3 className="text-xl font-bold text-white mb-3">Geography Teacher</h3>
+                  <p className="text-orange-400 font-medium mb-3">Abingdon School · Oct 2023 - May 2024</p>
                   <p className="text-gray-300 leading-relaxed mb-4">
-                    Master thesis project developing MDP wildfire model with Monte-Carlo Tree Search optimization. Published first-author paper in Combustion Science & Technology.
+                    Taught Geography at an independent school in Oxfordshire, including a two-term course on the Anthropocene. 
+                    Led the school Geography Club conducting an investigation into the school's climate impact. Received extensive 
+                    training on novel teaching methods and participated in curriculum development meetings.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">MCTS</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">MDP</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Optimization</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Research</Badge>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://drive.google.com/file/d/1XPphLHcbn0c3HYzP-rjMFvPR8HTJrSiZ/view?usp=drive_link', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Paper
-                  </Button>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Teaching</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Climate Education</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Curriculum Development</Badge>
                 </div>
               </Card>
 
-              {/* Biomechanical Exoskeleton */}
+              {/* Action Foundation */}
               <Card className="bg-gray-800 border-gray-700 p-6 h-full">
                 <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">Biomechanical Exoskeleton</h3>
+                  <h3 className="text-xl font-bold text-white mb-3">Asylum-Seeker Caseworker</h3>
+                  <p className="text-orange-400 font-medium mb-3">Action Foundation UK · Oct 2021 - Jun 2022</p>
                   <p className="text-gray-300 leading-relaxed mb-4">
-                    Gravity-compensating shoulder exoskeleton for Long-COVID patients. Built with Arduino Mega, PID control, and conducted user testing.
+                    Worked at InterAction drop-in center for migrants, providing an accessible and supportive environment. 
+                    Trained as a caseworker to help asylum-seekers access legal, health, and education services, minimizing 
+                    feelings of isolation and connecting them to the local community.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Arduino</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">PID Control</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Biomechanics</Badge>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDownloadPresentation}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Presentation
-                  </Button>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Casework</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Vulnerable Populations</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Community Integration</Badge>
                 </div>
               </Card>
 
-              {/* LBM Arena */}
+              {/* Tearfund */}
               <Card className="bg-gray-800 border-gray-700 p-6 h-full">
                 <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">LBM Arena</h3>
+                  <h3 className="text-xl font-bold text-white mb-3">Volunteer and Media Coordinator</h3>
+                  <p className="text-orange-400 font-medium mb-3">Tearfund · Jan 2019 - Apr 2019</p>
                   <p className="text-gray-300 leading-relaxed mb-4">
-                    Competitive platform where Large Behaviour Models battle across games to determine their strength in robotics and decision-making.
+                    Spent three months volunteering in Tanzania, teaching geography and English in primary and secondary schools. 
+                    Co-led an initiative to increase agroforestry in the region. Observed HIV support groups and community 
+                    mobilization meetings. Contributed to Tearfund social media and blog content.
                   </p>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <Badge variant="secondary" className="bg-gray-700 text-gray-300">Game-Based Benchmarking</Badge>
-                    <Badge variant="secondary" className="bg-gray-700 text-gray-300">Robotics AI</Badge>
-                    <Badge variant="secondary" className="bg-gray-700 text-gray-300">Leaderboard</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">International Development</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Agroforestry</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Content Creation</Badge>
+                </div>
+              </Card>
+
+              {/* Education */}
+              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-white mb-3">Education</h3>
+                  <div className="space-y-3 text-gray-300 leading-relaxed">
+                    <div>
+                      <p className="font-semibold text-white">MPhil Development Studies</p>
+                      <p className="text-sm text-orange-400">University of Cambridge · 2022-2023</p>
+                      <p className="text-sm">Grade: 72</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-white">BA Geography</p>
+                      <p className="text-sm text-orange-400">Durham University · 2019-2022</p>
+                      <p className="text-sm">First-class Honours (75)</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <Button
-                    asChild
-                    variant="default"
-                    size="sm"
-                    className="bg-orange-500 hover:bg-orange-600 text-white"
-                  >
-                    <Link to="/projects/lbm-arena">
-                      <Play className="w-4 h-4 mr-2" />
-                      Try Arena
-                    </Link>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://github.com/7jep7/lbm-arena', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <Github className="w-4 h-4 mr-2" />
-                    GitHub
-                  </Button>
-                </div>
-              </Card>
-
-              {/* PLC Copilot */}
-              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">PLC Copilot</h3>
-                  <p className="text-gray-300 leading-relaxed mb-4">
-                    AI-powered assistant for industrial automation and PLC programming. Get expert guidance on control systems, structured text programming, and industrial protocols.
-                  </p>
-                </div>
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">PLC Programming</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Industrial AI</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Automation</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">GPT-4o</Badge>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    asChild
-                    variant="default"
-                    size="sm"
-                    className="bg-orange-500 hover:bg-orange-600 text-white"
-                  >
-                    <Link to="/projects/plc-copilot">
-                      <Play className="w-4 h-4 mr-2" />
-                      Try Copilot
-                    </Link>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://github.com/7jep7/plc-copilot', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <Github className="w-4 h-4 mr-2" />
-                    GitHub
-                  </Button>
-                  {/* Removed extra PLC Copilot repo button */}
-                </div>
-              </Card>
-
-              {/* Photos from Stratosphere */}
-              <Card className="bg-gray-800 border-gray-700 p-6 h-full">
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold text-white mb-3">Photos from Stratosphere</h3>
-                  <p className="text-gray-300 leading-relaxed mb-4">
-                    High-altitude photography project capturing stunning images from the stratosphere using weather balloons and custom camera systems. Engineering challenge combining electronics, atmospheric physics, and photography.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Electronics</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Fundraising</Badge>
-                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Atmospheric Physics</Badge>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://www.youtube.com/watch?v=IPa6hRWRHTM', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <Youtube className="w-4 h-4 mr-2" />
-                    Video
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open('https://www.kickstarter.com/projects/gordonkoehn/caelum-photos-from-stratosphere', '_blank')}
-                    className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Kickstarter
-                  </Button>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Development Studies</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Geography</Badge>
+                  <Badge variant="secondary" className="bg-gray-700 text-gray-300">Research</Badge>
                 </div>
               </Card>
             </div>
@@ -575,10 +287,10 @@ export default function Home() {
         {/* Footer */}
         <footer className="max-w-4xl mx-auto px-6 py-16 text-center">
           <div className="border-t border-gray-700 pt-12">
-            <p className="text-gray-300 mb-6">Let's connect and build something amazing together</p>
+            <p className="text-gray-300 mb-6">Let's connect and work towards a more sustainable and just world</p>
             <div className="flex justify-center space-x-6 mb-8">
               <a 
-                href="https://linkedin.com/in/jep7" 
+                href="https://www.linkedin.com/in/calum-steer-8460b0149" 
                 className="flex items-center space-x-2 text-gray-300 hover:text-orange-500 transition-colors duration-200"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -586,26 +298,8 @@ export default function Home() {
                 <Linkedin className="w-5 h-5" />
                 <span className="font-medium">LinkedIn</span>
               </a>
-              <a 
-                href="https://github.com/7jep7" 
-                className="flex items-center space-x-2 text-gray-300 hover:text-orange-500 transition-colors duration-200"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Github className="w-5 h-5" />
-                <span className="font-medium">GitHub</span>
-              </a>
-              <a 
-                href="https://instagram.com/7jep7" 
-                className="flex items-center space-x-2 text-gray-300 hover:text-orange-500 transition-colors duration-200"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Instagram className="w-5 h-5" />
-                <span className="font-medium">Instagram</span>
-              </a>
             </div>
-            <p className="text-gray-400 text-sm">© 2025 Jonas Petersen.</p>
+            <p className="text-gray-400 text-sm">© 2025 Calum Steer.</p>
           </div>
         </footer>
       </main>

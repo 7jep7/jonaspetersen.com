@@ -23,15 +23,15 @@ export const links: LinksFunction = () => [
 ];
 
 export const meta: MetaFunction = () => [
-  { title: "Jonas Petersen - Portfolio" },
+  { title: "Calum Steer - Portfolio" },
   { 
     name: "description", 
-    content: "Computational engineer with AI/robotics expertise. Co-founded and scaled AI startup to €500k revenue. Cambridge MPhil, Imperial MEng. Building the future of human-robot interaction." 
+    content: "Programme Officer for environmental conservation and sustainable development. MPhil Development Studies, Cambridge. First-class Geography degree, Durham. Working on sustainable livelihoods in Madagascar." 
   },
-  { property: "og:title", content: "Jonas Petersen - Portfolio" },
+  { property: "og:title", content: "Calum Steer - Portfolio" },
   { 
     property: "og:description", 
-    content: "Computational engineer with AI/robotics expertise. Cambridge MPhil, Imperial MEng. Building the future of human-robot interaction." 
+    content: "Programme Officer for environmental conservation and sustainable development. MPhil Development Studies, Cambridge. Working on sustainable livelihoods in Madagascar." 
   },
   { property: "og:type", content: "website" },
 ];
@@ -46,7 +46,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
         <link 
           rel="icon" 
-          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>JP</text></svg>" 
+          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>CS</text></svg>" 
         />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased"> 
