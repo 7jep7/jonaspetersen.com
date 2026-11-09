@@ -155,6 +155,8 @@ const publications: Publication[] = [
 
 export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
+  // One publication result open at a time; all folded by default.
+  const [openPub, setOpenPub] = useState<string | null>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -332,7 +334,7 @@ export default function Home() {
                         <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong>{pub.name}</strong> <span className="text-gray-400">{pub.summary}</span></span>
                       </div>
                       {pub.result && (
-                        <p className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] group-focus-visible:grid-rows-[1fr] [@media(hover:none)]:grid-rows-[1fr] transition-[grid-template-rows] duration-300 ease-out">
+                        <p className={`grid ${openPub === pub.name ? "grid-rows-[1fr]" : "grid-rows-[0fr]"} transition-[grid-template-rows] duration-300 ease-out`}>
                           <span className="overflow-hidden text-sm text-gray-400">
                             <span className="block pt-1.5 font-mono text-orange-400/80">→ {pub.result}</span>
                           </span>
@@ -343,10 +345,23 @@ export default function Home() {
                   </>
                 );
                 const className = "flex justify-between gap-3 group py-3";
+                const fold = {
+                  onMouseEnter: () => setOpenPub(pub.name),
+                  onMouseLeave: () => setOpenPub(null),
+                  onFocus: () => setOpenPub(pub.name),
+                  // Touch screens have no hover: the first tap unfolds, the second follows the link.
+                  onClick: (e: React.MouseEvent) => {
+                    if (!window.matchMedia("(hover: none)").matches) return;
+                    if (openPub !== pub.name) {
+                      e.preventDefault();
+                      setOpenPub(pub.name);
+                    }
+                  },
+                };
                 return pub.link ? (
-                  <a key={pub.name} href={pub.link} target="_blank" rel="noopener noreferrer" className={className}>{row}</a>
+                  <a key={pub.name} href={pub.link} target="_blank" rel="noopener noreferrer" className={className} {...fold}>{row}</a>
                 ) : (
-                  <div key={pub.name} className={className}>{row}</div>
+                  <div key={pub.name} className={className} {...fold}>{row}</div>
                 );
               })}
             </div>
