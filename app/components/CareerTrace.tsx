@@ -25,6 +25,7 @@ interface Event {
   x: number;
   side: Side;
   external?: boolean;
+  inner?: boolean; // badge sits in the inner row, close to the line
 }
 
 const periods: Period[] = [
@@ -36,11 +37,12 @@ const periods: Period[] = [
 const events: Event[] = [
   { id: "bcg", label: "BCG offer · declined", href: "#k2", x: 289, side: "top" },
   { id: "forgis", label: "Forgis", href: "#forgis", x: 412, side: "bottom" },
-  { id: "icml", label: "5 × ICML", href: "#publications", x: 500, side: "top" },
-  { id: "accel", label: "DeepMind Accelerator", href: "https://deepmind.google/accelerators/robotics/", x: 580, side: "bottom", external: true },
-  { id: "grant", label: "$300k compute", href: "https://lnkd.in/p/eKv4q8Zp", x: 670, side: "top", external: true },
-  { id: "neurips", label: "5 × NeurIPS", href: "#publications", x: 738, side: "bottom" },
-  { id: "gemma", label: "Gemmaverse", href: "https://deepmind.google/models/gemma/gemmaverse/forgis/", x: 805, side: "top", external: true },
+  { id: "eth", label: "ETH · Siegwart", href: "https://asl.ethz.ch/", x: 478, side: "top", external: true, inner: true },
+  { id: "icml", label: "5 × ICML", href: "#publications", x: 548, side: "top" },
+  { id: "accel", label: "DeepMind Accelerator", href: "https://deepmind.google/accelerators/robotics/", x: 615, side: "bottom", external: true },
+  { id: "grant", label: "$300k compute", href: "https://lnkd.in/p/eKv4q8Zp", x: 685, side: "top", external: true },
+  { id: "neurips", label: "5 × NeurIPS", href: "#publications", x: 750, side: "bottom" },
+  { id: "gemma", label: "Gemmaverse", href: "https://deepmind.google/models/gemma/gemmaverse/forgis/", x: 810, side: "top", external: true },
 ];
 
 const ticks = [
@@ -113,7 +115,7 @@ export function CareerTrace() {
             {/* Connectors from spike tips to badges */}
             {events.map((e) => (
               <line key={e.id} x1={e.x} x2={e.x}
-                y1={e.side === "top" ? 22 : H - 22} y2={e.side === "top" ? BASE - SPIKE - 2 : BASE + SPIKE + 2}
+                y1={e.side === "top" ? (e.inner ? 42 : 22) : H - (e.inner ? 42 : 22)} y2={e.side === "top" ? BASE - SPIKE - 2 : BASE + SPIKE + 2}
                 stroke="currentColor" strokeWidth="1" strokeDasharray="1 3" vectorEffect="non-scaling-stroke"
                 className={`career-fade transition-colors ${active === e.id ? "text-orange-400" : "text-gray-600"}`}
                 style={{ animationDelay: `${(e.x / NOW) * 1.2}s` }} />
@@ -147,7 +149,7 @@ export function CareerTrace() {
             <a key={e.id} {...linkProps(e.href, e.external)} className={badge}
               onMouseEnter={() => setActive(e.id)} onMouseLeave={() => setActive(null)}
               onFocus={() => setActive(e.id)} onBlur={() => setActive(null)}
-              style={{ left: pct(e.x), [e.side]: 0, animationDelay: `${(e.x / NOW) * 1.2}s` }}>
+              style={{ left: pct(e.x), [e.side]: e.inner ? 26 : 0, animationDelay: `${(e.x / NOW) * 1.2}s` }}>
               {e.label}
             </a>
           ))}
