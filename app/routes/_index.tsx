@@ -24,15 +24,15 @@ import type { MetaFunction } from "@remix-run/node";
 export const meta: MetaFunction = () => {
   return [
     { title: "Jonas Petersen - Head of Research at Forgis" },
-    { name: "description", content: "Head of Research at Forgis, building the industrial world model. 8 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator. Cambridge, Imperial, ETH." },
+    { name: "description", content: "Head of Research at Forgis, building the industrial world model. 10 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator. Cambridge, Imperial, ETH." },
     { name: "keywords", content: "AI, World Models, JEPA, Industrial AI, Manufacturing, Time Series, Machine Learning, Forgis" },
     { property: "og:title", content: "Jonas Petersen - Head of Research at Forgis" },
-    { property: "og:description", content: "Head of Research at Forgis, building the industrial world model. 8 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator. Cambridge, Imperial, ETH." },
+    { property: "og:description", content: "Head of Research at Forgis, building the industrial world model. 10 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator. Cambridge, Imperial, ETH." },
     { property: "og:type", content: "website" },
     { property: "og:url", content: "https://jonaspetersen.com" },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: "Jonas Petersen - Head of Research at Forgis" },
-    { name: "twitter:description", content: "Head of Research at Forgis, building the industrial world model. 8 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator. Cambridge, Imperial, ETH." },
+    { name: "twitter:description", content: "Head of Research at Forgis, building the industrial world model. 10 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator. Cambridge, Imperial, ETH." },
   ];
 };
 
@@ -272,7 +272,7 @@ export default function Home() {
                   industrial world model
                 </span>
                 .{" "}
-                8 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator.
+                10 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator.
                 Cambridge, Imperial, ETH.
               </p>
             </div>
