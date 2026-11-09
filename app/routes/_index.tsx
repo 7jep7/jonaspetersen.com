@@ -313,7 +313,7 @@ export default function Home() {
         {/* Publications Section */}
         <section className="max-w-4xl mx-auto px-6 pb-16">
           <h2 className="text-3xl font-bold text-white mb-4 text-center">Publications</h2>
-          <p className="text-gray-400 text-center mb-8">My workshop papers at NeurIPS and ICML 2026.</p>
+          <p className="text-gray-400 text-center mb-8">My papers at NeurIPS and ICML 2026.</p>
 
           <Card className="bg-gray-800 border-gray-700 p-6">
             <div className="divide-y divide-gray-700">
