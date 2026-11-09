@@ -16,6 +16,7 @@ interface Period {
   to: number;
   side: Side;
   labelX?: number; // badge centre, when the bracket centre collides
+  external?: boolean;
 }
 
 interface Event {
@@ -29,8 +30,8 @@ interface Event {
 }
 
 const periods: Period[] = [
-  { label: "Imperial · Dean's List", href: "#about", from: 20, to: 200, side: "top" },
-  { label: "Cambridge · Distinction", href: "#wildfire", from: 206, to: 286, side: "bottom" },
+  { label: "Imperial · Dean's List", href: "#wildfire", from: 20, to: 200, side: "top" },
+  { label: "Cambridge · Distinction", href: "/cv.pdf", external: true, from: 206, to: 286, side: "bottom" },
   { label: "Co-founded K2", href: "#k2", from: 292, to: 400, side: "top", labelX: 362 },
 ];
 
@@ -140,7 +141,7 @@ export function CareerTrace() {
           </svg>
 
           {periods.map((p) => (
-            <a key={p.label} {...linkProps(p.href)} className={badge}
+            <a key={p.label} {...linkProps(p.href, p.external)} className={badge}
               style={{ left: pct(p.labelX ?? (p.from + p.to) / 2), [p.side]: 26, animationDelay: `${(p.to / NOW) * 1.2}s` }}>
               {p.label}
             </a>

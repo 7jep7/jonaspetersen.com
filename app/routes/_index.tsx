@@ -37,100 +37,6 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-interface Project {
-  title: string;
-  description: string;
-  skills: string[];
-  buttons: Array<{
-    label: string;
-    icon: any;
-    href?: string;
-    variant?: "default" | "secondary" | "outline";
-  }>;
-  featured?: boolean;
-  size?: "large" | "small";
-}
-
-const projects: Project[] = [
-  {
-    title: "human2robot",
-    description: "Coordination and data layer for the robotic age. Training data platform using imitation learning from human hand video recordings. Won 2 hackathons and secured YC interview.",
-    skills: ["Python", "ROS", "Isaac Lab", "SO-101 Manipulator", "Computer Vision"],
-    featured: true,
-    size: "large",
-    buttons: [
-      { label: "GitHub", icon: Github, href: "https://github.com/7jep7/human2robot", variant: "default" as const },
-      { label: "Website", icon: ExternalLink, href: "https://www.l5e.xyz", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "LBM Arena",
-    description: "Competitive benchmarking platform where Large Behaviour Models compete across games to determine their relative strength. Solving the reproducibility crisis in robotics AI evaluation.",
-    skills: ["Game Theory", "Model Evaluation", "Competition Platform", "Benchmarking"],
-    featured: true,
-    size: "large",
-    buttons: [
-      { label: "Visit Arena", icon: ExternalLink, href: "/projects/lbm-arena", variant: "default" as const },
-      { label: "Submit Model", icon: Star, href: "/projects/lbm-arena#submit", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "PLC Copilot",
-    description: "AI-powered assistant for industrial automation and PLC programming. Expert guidance on control systems, structured text programming, and industrial protocols using GPT-4o.",
-    skills: ["PLC Programming", "Industrial AI", "Automation", "GPT-4o"],
-    featured: true,
-    size: "large",
-    buttons: [
-      { label: "Try Copilot", icon: Play, href: "/projects/plc-copilot", variant: "default" as const }
-    ]
-  },
-  {
-    title: "K2 AI",
-    description: "Co-founded AI startup, scaled to 10 employees and >€500k revenue in 10 months. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.",
-    skills: ["LLMs", "SaaS", "AI Automation"],
-    size: "large",
-    buttons: [
-      { label: "LinkedIn", icon: Linkedin, href: "https://www.linkedin.com/company/100340844", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "Reinforcement Learning Projects",
-    description: "Reinforcement learning implementations including Monte Carlo Tree Search for wildfire suppression and autonomous control systems.",
-    skills: ["PyTorch", "Reinforcement Learning", "OpenAI Gym", "ROS", "Isaac Lab"],
-    size: "small",
-    buttons: [
-      { label: "GitHub", icon: Github, href: "https://github.com/7jep7/RL-Projects", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "Wildfire Suppression Model",
-    description: "Master thesis project developing MDP wildfire model with Monte-Carlo Tree Search optimization. Published first-author paper in Combustion Science & Technology.",
-    skills: ["MCTS", "Optimization", "Research"],
-    size: "small",
-    buttons: [
-      { label: "Paper", icon: FileText, href: "https://drive.google.com/file/d/1XPphLHcbn0c3HYzP-rjMFvPR8HTJrSiZ/view?usp=drive_link", variant: "outline" as const }
-    ]
-  },
-  {
-    title: "Biomechanical Exoskeleton",
-    description: "Gravity-compensating shoulder exoskeleton for Long-COVID patients. Built with Arduino Mega, PID control, and conducted user testing.",
-    skills: ["Arduino", "PID Control", "Biomechanics"],
-    size: "small",
-    buttons: [
-      { label: "Demo", icon: Youtube, variant: "outline" as const }
-    ]
-  },
-  {
-    title: "Photos from Stratosphere",
-    description: "High-altitude photography project capturing stunning images from the stratosphere using weather balloons and custom camera systems. Engineering challenge combining electronics, atmospheric physics, and photography.",
-    skills: ["Electronics", "Photography", "Atmospheric Physics"],
-    size: "small",
-    buttons: [
-      { label: "Video", icon: Youtube, href: "https://www.youtube.com/watch?v=IPa6hRWRHTM", variant: "outline" as const },
-      { label: "Kickstarter", icon: ExternalLink, href: "https://www.kickstarter.com/projects/gordonkoehn/caelum-photos-from-stratosphere", variant: "outline" as const }
-    ]
-  }
-];
 
 interface Publication {
   name: string;
@@ -281,7 +187,7 @@ export default function Home() {
               </p>
               <p className="text-base md:text-lg text-gray-400 leading-relaxed mt-5 border-l-2 border-orange-500/60 pl-4 text-left">
                 On a production line, by the time a camera sees the defect, the part is already scrap.
-                The machine&apos;s sensors knew earlier.
+                Often, the machine&apos;s own sensors saw it coming.
               </p>
             </div>
           </div>
@@ -431,7 +337,7 @@ export default function Home() {
                   Co-founded AI startup. 10 employees, &gt;€500k revenue in 10 months, 30+ CFO conversations.
                 </p>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => window.open('https://www.linkedin.com/company/100340844', '_blank')} className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
+                  <Button variant="outline" size="sm" onClick={() => window.open('https://www.linkedin.com/company/100340844/', '_blank')} className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
                     <Linkedin className="w-3 h-3 mr-1" />LinkedIn
                   </Button>
                 </div>
@@ -440,10 +346,10 @@ export default function Home() {
               <Card id="wildfire" className="scroll-mt-24 bg-gray-800 border-gray-700 p-5">
                 <h3 className="text-lg font-bold text-white mb-2">Wildfire Suppression</h3>
                 <p className="text-gray-300 text-sm mb-3">
-                  Cambridge master's thesis. MDP + MCTS optimization. Published in Combustion Science & Technology.
+                  Imperial MEng thesis. MDP + MCTS optimisation. Published in Combustion Science &amp; Technology.
                 </p>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => window.open('https://drive.google.com/file/d/1XPphLHcbn0c3HYzP-rjMFvPR8HTJrSiZ/view?usp=drive_link', '_blank')} className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
+                  <Button variant="outline" size="sm" onClick={() => window.open('https://doi.org/10.1080/00102202.2023.2246195', '_blank')} className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
                     <FileText className="w-3 h-3 mr-1" />Paper
                   </Button>
                 </div>
