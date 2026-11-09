@@ -27,8 +27,8 @@ interface Event {
 }
 
 const periods: Period[] = [
-  { label: "Imperial", href: "#about", from: 20, to: 150, side: "top" },
-  { label: "Cambridge", href: "#wildfire", from: 156, to: 226, side: "bottom" },
+  { label: "Imperial · Dean's List", href: "#about", from: 20, to: 150, side: "top" },
+  { label: "Cambridge · Distinction", href: "#wildfire", from: 156, to: 226, side: "bottom" },
   { label: "Co-founded K2", href: "#k2", from: 232, to: 330, side: "top" },
 ];
 
