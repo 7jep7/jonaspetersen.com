@@ -24,15 +24,15 @@ import type { MetaFunction } from "@remix-run/node";
 export const meta: MetaFunction = () => {
   return [
     { title: "Jonas Petersen - Head of Research at Forgis" },
-    { name: "description", content: "Head of Research at Forgis, building the world model for industrial systems. 4 ICML 2026 papers (1 Spotlight) in 6 months. Cambridge, Imperial, ETH." },
+    { name: "description", content: "Head of Research at Forgis, building the industrial world model. 8 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator. Cambridge, Imperial, ETH." },
     { name: "keywords", content: "AI, World Models, JEPA, Industrial AI, Manufacturing, Time Series, Machine Learning, Forgis" },
     { property: "og:title", content: "Jonas Petersen - Head of Research at Forgis" },
-    { property: "og:description", content: "Head of Research at Forgis, building the world model for industrial systems. 4 ICML 2026 papers (1 Spotlight) in 6 months. Cambridge, Imperial, ETH." },
+    { property: "og:description", content: "Head of Research at Forgis, building the industrial world model. 8 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator. Cambridge, Imperial, ETH." },
     { property: "og:type", content: "website" },
     { property: "og:url", content: "https://jonaspetersen.com" },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: "Jonas Petersen - Head of Research at Forgis" },
-    { name: "twitter:description", content: "Head of Research at Forgis, building the world model for industrial systems. 4 ICML 2026 papers (1 Spotlight) in 6 months. Cambridge, Imperial, ETH." },
+    { name: "twitter:description", content: "Head of Research at Forgis, building the industrial world model. 8 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator. Cambridge, Imperial, ETH." },
   ];
 };
 
@@ -85,7 +85,7 @@ const projects: Project[] = [
   },
   {
     title: "K2 AI",
-    description: "Co-founded AI startup, scaled to 10 employees and >€500k revenue. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.",
+    description: "Co-founded AI startup, scaled to 10 employees and >€500k revenue in 10 months. Developed task mining SaaS MVP using SLMs with positive feedback from 30+ CFOs.",
     skills: ["LLMs", "SaaS", "AI Automation"],
     size: "large",
     buttons: [
@@ -131,6 +131,26 @@ const projects: Project[] = [
   }
 ];
 
+interface Publication {
+  name: string;
+  summary: string;
+  venue: string;
+  link?: string;
+  award?: string;
+  logo?: string;
+}
+
+const publications: Publication[] = [
+  { name: "FactoryBench", summary: "Benchmark for industrial machine understanding", venue: "PUDM @ NeurIPS", award: "Oral", link: "https://arxiv.org/abs/2605.07675" },
+  { name: "Saturn", summary: "A time-series foundation model for classification and event forecasting", venue: "FMTS @ NeurIPS", logo: "/saturn-logo.png" },
+  { name: "KITE", summary: "Knowledge-injected encoder for time-series event forecasting", venue: "FMTS @ NeurIPS", link: "https://arxiv.org/abs/2610.12738" },
+  { name: "Certified Access", summary: "Test-time compute on a physics-structured memory", venue: "LCFM @ NeurIPS", link: "https://arxiv.org/abs/2610.39073" },
+  { name: "Retention", summary: "Predictable retention and exact deletion in a physics-structured memory", venue: "STODY @ NeurIPS", link: "https://openreview.net/pdf?id=piKgPzLiyx" },
+  { name: "HEPA", summary: "World model architecture for event prediction in time series", venue: "FMSD @ ICML", award: "Spotlight", link: "https://arxiv.org/abs/2605.11130" },
+  { name: "FactoryNet", summary: "Large-scale dataset for industrial time-series foundation models", venue: "AI4Physics + FMSD @ ICML", link: "https://arxiv.org/abs/2605.09081" },
+  { name: "Tabula RASA", summary: "Structural inductive bias for knowledge graph reasoning", venue: "GFM @ ICML", link: "https://arxiv.org/abs/2602.02834" },
+];
+
 export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -142,7 +162,7 @@ export default function Home() {
 
     // Check initial scroll position
     handleScroll();
-    
+
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -170,20 +190,19 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
-      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out border-b ${
-        isScrolled 
-          ? 'bg-gray-900/60 backdrop-blur-2xl border-gray-600/20 shadow-xl shadow-black/10' 
+      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out border-b ${isScrolled
+          ? 'bg-gray-900/60 backdrop-blur-2xl border-gray-600/20 shadow-xl shadow-black/10'
           : 'bg-gray-800/70 backdrop-blur-md border-gray-700/50'
-      }`}>
+        }`}>
         <div className="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2">
             <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center">
               <span className="text-white font-bold text-lg">JP</span>
             </div>
           </div>
-          <Button 
+          <Button
             onClick={handleDownloadCV}
-            variant="outline" 
+            variant="outline"
             size="sm"
             className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500"
           >
@@ -203,9 +222,9 @@ export default function Home() {
               <div className="relative mb-4">
                 <div className="w-48 h-48 rounded-full p-0.5 bg-white">
                   <img
-                  src="/LinkedIn profile pic - shirt.png"
-                  alt="Jonas Petersen"
-                  className="w-full h-full rounded-full object-cover"
+                    src="/LinkedIn profile pic - shirt.png"
+                    alt="Jonas Petersen"
+                    className="w-full h-full rounded-full object-cover"
                   />
                 </div>
               </div>
@@ -239,23 +258,23 @@ export default function Home() {
                 </a>
               </div>
             </div>
-            
+
             {/* Text Content */}
             <div className="md:col-span-8 text-center md:text-left flex flex-col">
               <h1 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight bg-gradient-to-r from-white via-orange-400 to-orange-600 bg-clip-text text-transparent">
                 Hi, I'm Jonas
               </h1>
-                <p className="text-xl md:text-2xl text-gray-300 leading-relaxed mb-8 md:mb-0">
-                  Head of Research at{" "}
-                  <a href="https://www.forgis.com" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 font-semibold">Forgis</a>,
-                  building the{" "}
-                    <span className="bg-orange-400 rounded px-1 font-bold" style={{ lineHeight: "1.5", paddingTop: "0.1em", paddingBottom: "0.1em" }}>
-                      world model for industrial systems
-                    </span>
-                    .{" "}
-                  4 ICML 2026 papers (1 Spotlight).
-                  Cambridge, Imperial, ETH.
-                </p>
+              <p className="text-xl md:text-2xl text-gray-300 leading-relaxed mb-8 md:mb-0">
+                Head of Research at{" "}
+                <a href="https://www.forgis.com" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 font-semibold">Forgis</a>,
+                building the{" "}
+                <span className="bg-orange-400 rounded px-1 font-bold" style={{ lineHeight: "1.5", paddingTop: "0.1em", paddingBottom: "0.1em" }}>
+                  industrial world model
+                </span>
+                .{" "}
+                8 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator.
+                Cambridge, Imperial, ETH.
+              </p>
             </div>
           </div>
         </section>
@@ -265,13 +284,19 @@ export default function Home() {
           <div>
             <Card className="bg-gray-800 border-gray-700 p-8">
               <h2 className="text-3xl font-bold text-white mb-6">About</h2>
-                            <div className="space-y-4 text-gray-300 leading-relaxed">
+              <div className="space-y-4 text-gray-300 leading-relaxed">
                 <p>
                   First employee at <a href="https://www.forgis.com" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 font-semibold">Forgis</a>,
-                  where we build <strong>Hyperion</strong>: a world model that learns machine dynamics from sensor data and predicts
-                  critical events across entire factories. Built the research division from scratch: <strong>10 researchers</strong> across
-                  ETH, Cambridge, Oxford, Imperial, Stanford, and Berkeley, <strong>4 ICML 2026 papers</strong> (1 Spotlight) in 6 months.
-                  Previously co-founded a startup to <strong>€500k revenue</strong> in under 12 months. Degrees from Cambridge and Imperial.
+                  where we build <strong>Hyperion</strong>, an industrial world model that learns machine dynamics from sensor data and predicts
+                  critical events across whole factories. I built the research team from scratch: <strong>10 researchers</strong> from
+                  ETH, Cambridge, Oxford, Imperial, Stanford and Berkeley, with <strong>10 papers</strong> accepted at NeurIPS and ICML 2026.
+                  I am an author on 8 of them: first author on 5, including an ICML spotlight, and last author on a NeurIPS oral.
+                </p>
+                <p>
+                  The research ships. Hyperion runs at the machine on a single edge GPU next to a fine-tuned Gemma 3n, a deployment
+                  Google DeepMind <a href="https://deepmind.google/models/gemma/gemmaverse/forgis/" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 font-semibold">features in its Gemmaverse</a>.
+                  We came through the <strong>Google DeepMind Accelerator</strong> and won a <strong>$300k GPU grant</strong> from the Swiss National
+                  Supercomputing Centre. Before Forgis I co-founded a startup that reached <strong>€500k revenue</strong> in 10 months.
                 </p>
                 <p>
                   Manufacturing is 16% of GDP and the backbone of European prosperity, yet it's in decline.
@@ -288,39 +313,30 @@ export default function Home() {
         {/* Publications Section */}
         <section className="max-w-4xl mx-auto px-6 pb-16">
           <h2 className="text-3xl font-bold text-white mb-4 text-center">Publications</h2>
-          <p className="text-gray-400 text-center mb-8">All from our first 6 months. We're just getting started.</p>
+          <p className="text-gray-400 text-center mb-8">My workshop papers at NeurIPS and ICML 2026.</p>
 
           <Card className="bg-gray-800 border-gray-700 p-6">
-            <div className="space-y-3">
-              <a href="https://www.forgis.com/papers/hepa.html" target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between gap-3 group py-2 border-b border-gray-700 last:border-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Badge className="bg-orange-500 text-white px-2 py-0.5 text-xs font-semibold shrink-0">Spotlight</Badge>
-                  <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong>HEPA</strong> <span className="text-gray-400">World model architecture for event prediction in time series</span></span>
-                </div>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-400 shrink-0 text-xs">FMSD @ ICML</Badge>
-              </a>
-              <a href="https://www.forgis.com/papers/factorybench.html" target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between gap-3 group py-2 border-b border-gray-700">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong>FactoryBench</strong> <span className="text-gray-400">Benchmark for industrial machine understanding</span></span>
-                </div>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-400 shrink-0 text-xs">arXiv</Badge>
-              </a>
-              <a href="https://www.forgis.com/papers/factorynet.html" target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between gap-3 group py-2 border-b border-gray-700">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong>FactoryNet</strong> <span className="text-gray-400">Large-scale dataset for industrial time-series foundation models</span></span>
-                </div>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-400 shrink-0 text-xs">AI4Physics @ ICML</Badge>
-              </a>
-              <a href="https://www.forgis.com/papers/rasa.html" target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between gap-3 group py-2">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong>Tabula RASA</strong> <span className="text-gray-400">Structural inductive bias for knowledge graph reasoning</span></span>
-                </div>
-                <Badge variant="secondary" className="bg-gray-700 text-gray-400 shrink-0 text-xs">GFM @ ICML</Badge>
-              </a>
+            <div className="divide-y divide-gray-700">
+              {publications.map((pub) => {
+                const row = (
+                  <>
+                    <div className="flex items-center gap-3 min-w-0">
+                      {pub.award && (
+                        <Badge className="bg-orange-500 text-white px-2 py-0.5 text-xs font-semibold shrink-0">{pub.award}</Badge>
+                      )}
+                      {pub.logo && <img src={pub.logo} alt="" className="h-5 w-auto shrink-0" />}
+                      <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong>{pub.name}</strong> <span className="text-gray-400">{pub.summary}</span></span>
+                    </div>
+                    <Badge variant="secondary" className="bg-gray-700 text-gray-400 shrink-0 text-xs">{pub.venue}</Badge>
+                  </>
+                );
+                const className = "flex items-center justify-between gap-3 group py-3";
+                return pub.link ? (
+                  <a key={pub.name} href={pub.link} target="_blank" rel="noopener noreferrer" className={className}>{row}</a>
+                ) : (
+                  <div key={pub.name} className={className}>{row}</div>
+                );
+              })}
             </div>
           </Card>
         </section>
@@ -341,9 +357,9 @@ export default function Home() {
               <div className="mb-6">
                 <h3 className="text-2xl font-bold text-white mb-3">Forgis - Hyperion</h3>
                 <p className="text-white leading-relaxed mb-4">
-                  The world model for industrial systems. Hyperion learns machine dynamics from raw sensor data
-                  using JEPA self-supervised pretraining, predicting failures, anomalies, and regime changes
-                  across entire factories with minimal labels. Validated with Fortune 100 customers.
+                  The industrial world model. Hyperion learns machine dynamics from raw sensor data with JEPA
+                  self-supervised pretraining, then predicts failures, anomalies and regime changes across whole
+                  factories from few labels. Validated with Fortune 100 customers and deployed at the edge with Google DeepMind.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 mb-6">
@@ -395,7 +411,7 @@ export default function Home() {
               <Card className="bg-gray-800 border-gray-700 p-5">
                 <h3 className="text-lg font-bold text-white mb-2">K2 AI</h3>
                 <p className="text-gray-300 text-sm mb-3">
-                  Co-founded AI startup. 10 employees, &gt;€500k revenue, 30+ CFO conversations.
+                  Co-founded AI startup. 10 employees, &gt;€500k revenue in 10 months, 30+ CFO conversations.
                 </p>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => window.open('https://www.linkedin.com/company/100340844', '_blank')} className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
