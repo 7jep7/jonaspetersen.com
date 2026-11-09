@@ -268,7 +268,7 @@ export default function Home() {
               <h1 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight bg-gradient-to-r from-white via-orange-400 to-orange-600 bg-clip-text text-transparent">
                 Hi, I'm Jonas
               </h1>
-              <p className="text-xl md:text-2xl text-gray-300 leading-relaxed mb-8 md:mb-0">
+              <p className="text-xl md:text-2xl text-gray-300 leading-relaxed">
                 Head of Research at{" "}
                 <a href="https://www.forgis.com" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 font-semibold">Forgis</a>,
                 building the{" "}
@@ -278,6 +278,10 @@ export default function Home() {
                 .{" "}
                 10 papers at NeurIPS and ICML 2026 (1 Oral, 1 Spotlight), a $300k GPU grant and the Google DeepMind Accelerator.
                 Cambridge, Imperial, ETH.
+              </p>
+              <p className="text-base md:text-lg text-gray-400 leading-relaxed mt-5 border-l-2 border-orange-500/60 pl-4 text-left">
+                On a production line, by the time a camera sees the defect, the part is already scrap.
+                The machine&apos;s sensors knew earlier.
               </p>
             </div>
           </div>
