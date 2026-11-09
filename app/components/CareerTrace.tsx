@@ -15,6 +15,7 @@ interface Period {
   from: number;
   to: number;
   side: Side;
+  labelX?: number; // badge centre, when the bracket centre collides
 }
 
 interface Event {
@@ -27,26 +28,27 @@ interface Event {
 }
 
 const periods: Period[] = [
-  { label: "Imperial · Dean's List", href: "#about", from: 20, to: 150, side: "top" },
-  { label: "Cambridge · Distinction", href: "#wildfire", from: 156, to: 226, side: "bottom" },
-  { label: "Co-founded K2", href: "#k2", from: 232, to: 330, side: "top" },
+  { label: "Imperial · Dean's List", href: "#about", from: 20, to: 200, side: "top" },
+  { label: "Cambridge · Distinction", href: "#wildfire", from: 206, to: 286, side: "bottom" },
+  { label: "Co-founded K2", href: "#k2", from: 292, to: 400, side: "top", labelX: 362 },
 ];
 
 const events: Event[] = [
-  { id: "forgis", label: "Forgis", href: "#forgis", x: 372, side: "bottom" },
-  { id: "icml", label: "5 × ICML", href: "#publications", x: 480, side: "top" },
-  { id: "accel", label: "DeepMind Accelerator", href: "https://deepmind.google/accelerators/robotics/", x: 560, side: "bottom", external: true },
-  { id: "grant", label: "$300k compute", href: "https://lnkd.in/p/eKv4q8Zp", x: 660, side: "top", external: true },
-  { id: "neurips", label: "5 × NeurIPS", href: "#publications", x: 725, side: "bottom" },
-  { id: "gemma", label: "Gemmaverse", href: "https://deepmind.google/models/gemma/gemmaverse/forgis/", x: 800, side: "top", external: true },
+  { id: "bcg", label: "BCG offer · declined", href: "#k2", x: 289, side: "top" },
+  { id: "forgis", label: "Forgis", href: "#forgis", x: 412, side: "bottom" },
+  { id: "icml", label: "5 × ICML", href: "#publications", x: 500, side: "top" },
+  { id: "accel", label: "DeepMind Accelerator", href: "https://deepmind.google/accelerators/robotics/", x: 580, side: "bottom", external: true },
+  { id: "grant", label: "$300k compute", href: "https://lnkd.in/p/eKv4q8Zp", x: 670, side: "top", external: true },
+  { id: "neurips", label: "5 × NeurIPS", href: "#publications", x: 738, side: "bottom" },
+  { id: "gemma", label: "Gemmaverse", href: "https://deepmind.google/models/gemma/gemmaverse/forgis/", x: 805, side: "top", external: true },
 ];
 
 const ticks = [
   { x: 20, label: "'18" },
-  { x: 156, label: "'22" },
-  { x: 232, label: "'23" },
-  { x: 330, label: "'25" },
-  { x: 420, label: "'26" },
+  { x: 206, label: "'22" },
+  { x: 292, label: "'23" },
+  { x: 400, label: "'25" },
+  { x: 452, label: "'26" },
 ];
 
 // Small deterministic noise so the baseline reads as a real signal.
@@ -137,7 +139,7 @@ export function CareerTrace() {
 
           {periods.map((p) => (
             <a key={p.label} {...linkProps(p.href)} className={badge}
-              style={{ left: pct((p.from + p.to) / 2), [p.side]: p.side === "top" ? 26 : 18, animationDelay: `${(p.to / NOW) * 1.2}s` }}>
+              style={{ left: pct(p.labelX ?? (p.from + p.to) / 2), [p.side]: 26, animationDelay: `${(p.to / NOW) * 1.2}s` }}>
               {p.label}
             </a>
           ))}
