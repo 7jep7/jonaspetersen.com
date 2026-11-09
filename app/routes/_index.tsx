@@ -295,7 +295,7 @@ export default function Home() {
                   where we build <strong>Hyperion</strong>, an industrial world model that learns machine dynamics from sensor data and predicts
                   critical events across whole factories. I built the research team from scratch: <strong>10 researchers</strong> from
                   ETH, Cambridge, Oxford, Imperial, Stanford and Berkeley, with <strong>10 papers</strong> accepted at NeurIPS and ICML 2026.
-                  First author on 5, including an ICML spotlight, and last author on a NeurIPS oral.
+                  First author on 5, including an ICML spotlight, and joint last author on a NeurIPS oral.
                 </p>
                 <p>
                   The research ships. Hyperion runs at the machine on a single edge GPU next to a fine-tuned Gemma 3n, a deployment
