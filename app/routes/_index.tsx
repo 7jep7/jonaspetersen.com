@@ -331,7 +331,7 @@ export default function Home() {
                           <Badge className="bg-orange-500 text-white px-2 py-0.5 text-xs font-semibold shrink-0">{pub.award}</Badge>
                         )}
                         {pub.logo && <img src={pub.logo} alt="" className="h-5 w-auto shrink-0" />}
-                        <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong>{pub.name}</strong> <span className="text-gray-400">{pub.summary}</span></span>
+                        <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong data-title className={pub.link ? "[@media(hover:none)]:underline [@media(hover:none)]:decoration-orange-400/60 [@media(hover:none)]:underline-offset-4" : ""}>{pub.name}</strong> <span className="text-gray-400">{pub.summary}</span></span>
                       </div>
                       {pub.result && (
                         <p className={`grid ${openPub === pub.name ? "grid-rows-[1fr]" : "grid-rows-[0fr]"} transition-[grid-template-rows] duration-300 ease-out`}>
@@ -346,16 +346,17 @@ export default function Home() {
                 );
                 const className = "flex justify-between gap-3 group py-3";
                 const fold = {
-                  onMouseEnter: () => setOpenPub(pub.name),
-                  onMouseLeave: () => setOpenPub(null),
-                  onFocus: () => setOpenPub(pub.name),
-                  // Touch screens have no hover: the first tap unfolds, the second follows the link.
+                  // Pointer events, so taps on touch screens don't count as hover.
+                  onPointerEnter: (e: React.PointerEvent) => e.pointerType === "mouse" && setOpenPub(pub.name),
+                  onPointerLeave: (e: React.PointerEvent) => e.pointerType === "mouse" && setOpenPub(null),
+                  onFocus: (e: React.FocusEvent<HTMLElement>) => e.currentTarget.matches(":focus-visible") && setOpenPub(pub.name),
+                  // Touch screens have no hover: tapping the row folds it in or out,
+                  // tapping the bold title opens the paper.
                   onClick: (e: React.MouseEvent) => {
                     if (!window.matchMedia("(hover: none)").matches) return;
-                    if (openPub !== pub.name) {
-                      e.preventDefault();
-                      setOpenPub(pub.name);
-                    }
+                    if ((e.target as HTMLElement).closest("[data-title]") && pub.link) return;
+                    e.preventDefault();
+                    setOpenPub(openPub === pub.name ? null : pub.name);
                   },
                 };
                 return pub.link ? (
