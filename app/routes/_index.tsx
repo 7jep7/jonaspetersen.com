@@ -420,21 +420,6 @@ export default function Home() {
 
             {/* Other Projects - Compact Grid */}
             <div className="grid md:grid-cols-2 gap-4">
-              <Card className="bg-gray-800 border-gray-700 p-5">
-                <h3 className="text-lg font-bold text-white mb-2">human2robot</h3>
-                <p className="text-gray-300 text-sm mb-3">
-                  Imitation learning from human hand video. Won 2 hackathons, secured YC interview.
-                </p>
-                <div className="flex gap-2">
-                  <Button asChild variant="default" size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
-                    <Link to="/projects/hand-teleop"><Play className="w-3 h-3 mr-1" />Demo</Link>
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => window.open('https://github.com/7jep7/human2robot', '_blank')} className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
-                    <Github className="w-3 h-3 mr-1" />Code
-                  </Button>
-                </div>
-              </Card>
-
               <Card id="k2" className="scroll-mt-24 bg-gray-800 border-gray-700 p-5">
                 <h3 className="text-lg font-bold text-white mb-2">K2 AI</h3>
                 <p className="text-gray-300 text-sm mb-3">
