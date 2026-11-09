@@ -4,6 +4,7 @@ import { Link } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
+import { SensorTrace } from "~/components/SensorTrace";
 import {
   Download,
   Github,
@@ -138,17 +139,18 @@ interface Publication {
   link?: string;
   award?: string;
   logo?: string;
+  result?: string;
 }
 
 const publications: Publication[] = [
-  { name: "FactoryBench", summary: "Benchmark for industrial machine understanding", venue: "PUDM @ NeurIPS", award: "Oral", link: "https://arxiv.org/abs/2605.07675" },
+  { name: "FactoryBench", summary: "Benchmark for industrial machine understanding", venue: "PUDM @ NeurIPS", award: "Oral", link: "https://arxiv.org/abs/2605.07675", result: "70k+ questions at four causal levels. Frontier LLMs stay under 50% on structured tasks and reach 18% on decisions." },
   { name: "Saturn", summary: "A time-series foundation model for classification and event forecasting", venue: "FMTS @ NeurIPS", logo: "/saturn-logo.png" },
-  { name: "KITE", summary: "Knowledge-injected encoder for time-series event forecasting", venue: "FMTS @ NeurIPS", link: "https://arxiv.org/abs/2610.12738" },
-  { name: "Certified Access", summary: "Test-time compute on a physics-structured memory", venue: "LCFM @ NeurIPS", link: "https://arxiv.org/abs/2610.39073" },
-  { name: "Retention", summary: "Predictable retention and exact deletion in a physics-structured memory", venue: "STODY @ NeurIPS", link: "https://openreview.net/pdf?id=piKgPzLiyx" },
-  { name: "HEPA", summary: "World model architecture for event prediction in time series", venue: "FMSD @ ICML", award: "Spotlight", link: "https://arxiv.org/abs/2605.11130" },
-  { name: "FactoryNet", summary: "Large-scale dataset for industrial time-series foundation models", venue: "AI4Physics + FMSD @ ICML", link: "https://arxiv.org/abs/2605.09081" },
-  { name: "Tabula RASA", summary: "Structural inductive bias for knowledge graph reasoning", venue: "GFM @ ICML", link: "https://arxiv.org/abs/2602.02834" },
+  { name: "KITE", summary: "Knowledge-injected encoder for time-series event forecasting", venue: "FMTS @ NeurIPS", link: "https://arxiv.org/abs/2610.12738", result: "Switchable expert-knowledge injection: +14% from a periodicity clock, +53% out of domain." },
+  { name: "Certified Access", summary: "Test-time compute on a physics-structured memory", venue: "LCFM @ NeurIPS", link: "https://arxiv.org/abs/2610.39073", result: "Test-time compute over a symplectic memory that keeps its stability guarantees." },
+  { name: "Retention", summary: "Predictable retention and exact deletion in a physics-structured memory", venue: "STODY @ NeurIPS", link: "https://openreview.net/pdf?id=piKgPzLiyx", result: "Friction keeps memories and temperature erases them. Deletion is exact." },
+  { name: "HEPA", summary: "World model architecture for event prediction in time series", venue: "FMSD @ ICML", award: "Spotlight", link: "https://arxiv.org/abs/2605.11130", result: "Beats PatchTST, iTransformer, MAE and Chronos-2 on 10 of 14 benchmarks with one architecture and fixed hyperparameters." },
+  { name: "FactoryNet", summary: "Large-scale dataset for industrial time-series foundation models", venue: "AI4Physics + FMSD @ ICML", link: "https://arxiv.org/abs/2605.09081", result: "Models trained on simulation transfer within robot families, but rarely across manufacturers." },
+  { name: "Tabula RASA", summary: "Structural inductive bias for knowledge graph reasoning", venue: "GFM @ ICML", link: "https://arxiv.org/abs/2602.02834", result: "Sparse adjacency masking alone gives most of the gain: topology matters more than relation-specific parameters." },
 ];
 
 export default function Home() {
@@ -277,6 +279,7 @@ export default function Home() {
               </p>
             </div>
           </div>
+          <SensorTrace />
         </section>
 
         {/* About Section */}
@@ -320,17 +323,26 @@ export default function Home() {
               {publications.map((pub) => {
                 const row = (
                   <>
-                    <div className="flex items-center gap-3 min-w-0">
-                      {pub.award && (
-                        <Badge className="bg-orange-500 text-white px-2 py-0.5 text-xs font-semibold shrink-0">{pub.award}</Badge>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {pub.award && (
+                          <Badge className="bg-orange-500 text-white px-2 py-0.5 text-xs font-semibold shrink-0">{pub.award}</Badge>
+                        )}
+                        {pub.logo && <img src={pub.logo} alt="" className="h-5 w-auto shrink-0" />}
+                        <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong>{pub.name}</strong> <span className="text-gray-400">{pub.summary}</span></span>
+                      </div>
+                      {pub.result && (
+                        <p className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] group-focus-visible:grid-rows-[1fr] [@media(hover:none)]:grid-rows-[1fr] transition-[grid-template-rows] duration-300 ease-out">
+                          <span className="overflow-hidden text-sm text-gray-400">
+                            <span className="block pt-1.5 font-mono text-orange-400/80">→ {pub.result}</span>
+                          </span>
+                        </p>
                       )}
-                      {pub.logo && <img src={pub.logo} alt="" className="h-5 w-auto shrink-0" />}
-                      <span className="text-white group-hover:text-orange-400 transition-colors truncate"><strong>{pub.name}</strong> <span className="text-gray-400">{pub.summary}</span></span>
                     </div>
-                    <Badge variant="secondary" className="bg-gray-700 text-gray-400 shrink-0 text-xs">{pub.venue}</Badge>
+                    <Badge variant="secondary" className="bg-gray-700 text-gray-400 shrink-0 text-xs self-start mt-0.5">{pub.venue}</Badge>
                   </>
                 );
-                const className = "flex items-center justify-between gap-3 group py-3";
+                const className = "flex justify-between gap-3 group py-3";
                 return pub.link ? (
                   <a key={pub.name} href={pub.link} target="_blank" rel="noopener noreferrer" className={className}>{row}</a>
                 ) : (
