@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { CareerTrace } from "~/components/CareerTrace";
+import { ScrapTrace } from "~/components/ScrapTrace";
 import {
   Download,
   Github,
@@ -18,7 +19,8 @@ import {
   Play,
   BookOpen,
   GraduationCap,
-  Award
+  Award,
+  Mail
 } from "lucide-react";
 import type { MetaFunction } from "@remix-run/node";
 
@@ -98,7 +100,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-900 blueprint text-white">
       {/* Header */}
       <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out border-b ${isScrolled
           ? 'bg-gray-900/60 backdrop-blur-2xl border-gray-600/20 shadow-xl shadow-black/10'
@@ -189,6 +191,9 @@ export default function Home() {
                 On a production line, by the time a camera sees the defect, the part is already scrap.
                 Often, the machine&apos;s own sensors saw it coming.
               </p>
+              <div className="pl-[18px]">
+                <ScrapTrace />
+              </div>
             </div>
           </div>
           <CareerTrace />
@@ -251,7 +256,7 @@ export default function Home() {
                         </p>
                       )}
                     </div>
-                    <Badge variant="secondary" className="bg-gray-700 text-gray-400 shrink-0 text-xs self-start mt-0.5">{pub.venue}</Badge>
+                    <Badge variant="secondary" className="bg-gray-700 text-gray-400 shrink-0 font-mono text-[11px] font-normal self-start mt-0.5">{pub.venue}</Badge>
                   </>
                 );
                 const className = "flex justify-between gap-3 group py-3";
@@ -277,6 +282,20 @@ export default function Home() {
               })}
             </div>
           </Card>
+        </section>
+
+        {/* Hiring */}
+        <section id="join" className="max-w-4xl mx-auto px-6 pb-16 scroll-mt-24">
+          <div className="border-l-2 border-orange-500 pl-5 py-1">
+            <div className="font-mono text-[10px] uppercase tracking-widest text-orange-400 mb-2">We&apos;re hiring</div>
+            <p className="text-gray-300 leading-relaxed max-w-2xl">
+              We take 2 to 3 MSc and PhD researchers each semester to work on the industrial world model with us in Zurich,
+              on data from real machines. Write to me with a paper you liked and why.
+            </p>
+            <Button asChild variant="outline" size="sm" className="mt-4 border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
+              <a href="mailto:je77petersen@gmail.com?subject=Research%20at%20Forgis"><Mail className="w-4 h-4 mr-2" />Write to me</a>
+            </Button>
+          </div>
         </section>
 
         {/* Simple Projects Section */}
@@ -365,18 +384,6 @@ export default function Home() {
                     <Link to="/projects/plc-copilot"><Play className="w-3 h-3 mr-1" />Try it</Link>
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => window.open('https://github.com/7jep7/plc-copilot', '_blank')} className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
-                    <Github className="w-3 h-3 mr-1" />Code
-                  </Button>
-                </div>
-              </Card>
-
-              <Card className="bg-gray-800 border-gray-700 p-5">
-                <h3 className="text-lg font-bold text-white mb-2">RL Projects</h3>
-                <p className="text-gray-300 text-sm mb-3">
-                  DQN, PPO/SAC, Othello agent. 2nd place at Robo Innovate 2025.
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => window.open('https://github.com/7jep7/RL-Projects', '_blank')} className="border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
                     <Github className="w-3 h-3 mr-1" />Code
                   </Button>
                 </div>
