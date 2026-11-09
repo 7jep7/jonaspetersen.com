@@ -109,3 +109,17 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(75, 85, 99, 0.3) transparent;
 }
+
+/* Career trace on the home page: draw once, then stay still. */
+@keyframes career-wipe { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes career-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes career-flow { to { stroke-dashoffset: -16; } }
+.career-wipe { transform-box: fill-box; transform-origin: left; animation: career-wipe 1.2s ease-out both; }
+.career-fade { animation: career-fade 0.4s ease-out both; }
+.career-flow { animation: career-flow 1.6s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .career-wipe, .career-fade, .career-flow { animation: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}

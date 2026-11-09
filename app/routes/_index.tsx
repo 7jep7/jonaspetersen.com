@@ -4,7 +4,7 @@ import { Link } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
-import { SensorTrace } from "~/components/SensorTrace";
+import { CareerTrace } from "~/components/CareerTrace";
 import {
   Download,
   Github,
@@ -279,11 +279,11 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <SensorTrace />
+          <CareerTrace />
         </section>
 
         {/* About Section */}
-        <section className="max-w-4xl mx-auto px-6 pb-16">
+        <section id="about" className="max-w-4xl mx-auto px-6 pb-16 scroll-mt-24">
           <div>
             <Card className="bg-gray-800 border-gray-700 p-8">
               <h2 className="text-3xl font-bold text-white mb-6">About</h2>
@@ -314,7 +314,7 @@ export default function Home() {
         </section>
 
         {/* Publications Section */}
-        <section className="max-w-4xl mx-auto px-6 pb-16">
+        <section id="publications" className="max-w-4xl mx-auto px-6 pb-16 scroll-mt-24">
           <h2 className="text-3xl font-bold text-white mb-4 text-center">Publications</h2>
           <p className="text-gray-400 text-center mb-8">My papers at NeurIPS and ICML 2026.</p>
 
@@ -359,7 +359,7 @@ export default function Home() {
 
           <div className="space-y-8">
             {/* Forgis - Featured */}
-            <Card className="bg-gray-800 border-gray-700 p-8 relative">
+            <Card id="forgis" className="scroll-mt-24 bg-gray-800 border-gray-700 p-8 relative">
               <div className="absolute -top-3 left-8">
                 <Badge className="bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide">
                   <Star className="w-3 h-3 mr-1" />
@@ -420,7 +420,7 @@ export default function Home() {
                 </div>
               </Card>
 
-              <Card className="bg-gray-800 border-gray-700 p-5">
+              <Card id="k2" className="scroll-mt-24 bg-gray-800 border-gray-700 p-5">
                 <h3 className="text-lg font-bold text-white mb-2">K2 AI</h3>
                 <p className="text-gray-300 text-sm mb-3">
                   Co-founded AI startup. 10 employees, &gt;€500k revenue in 10 months, 30+ CFO conversations.
@@ -432,7 +432,7 @@ export default function Home() {
                 </div>
               </Card>
 
-              <Card className="bg-gray-800 border-gray-700 p-5">
+              <Card id="wildfire" className="scroll-mt-24 bg-gray-800 border-gray-700 p-5">
                 <h3 className="text-lg font-bold text-white mb-2">Wildfire Suppression</h3>
                 <p className="text-gray-300 text-sm mb-3">
                   Cambridge master's thesis. MDP + MCTS optimization. Published in Combustion Science & Technology.
