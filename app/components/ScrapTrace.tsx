@@ -1,7 +1,7 @@
 // The hero claim as a signal: the sensors drift before the camera sees anything.
 const W = 600;
 const H = 60;
-const BASE = 34;
+const BASE = 40;
 const DRIFT = 240; // sensors start to drift
 const DEFECT = 480; // camera sees the defect
 
@@ -9,7 +9,7 @@ const noise = (x: number) =>
   1.4 * Math.sin(x * 0.31) + 0.9 * Math.sin(x * 0.77 + 1.3) + 0.6 * Math.sin(x * 1.9 + 0.2);
 
 function signal(x: number) {
-  const t = Math.max(0, (x - DRIFT) / (DEFECT - DRIFT));
+  const t = Math.min(1, Math.max(0, (x - DRIFT) / (DEFECT - DRIFT)));
   // Drift: slow upward creep with growing jitter, then a step at the defect.
   let v = noise(x) * (1 + 1.8 * t * t) - 9 * t * t;
   if (x >= DEFECT) v -= 14 + noise(x * 1.7) * 2;
