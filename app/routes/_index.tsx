@@ -214,7 +214,7 @@ export default function Home() {
                 </p>
                 <p>
                   The research ships. Hyperion runs at the machine on a single edge GPU next to a fine-tuned Gemma 3n, a deployment
-                  Google DeepMind <a href="https://deepmind.google/models/gemma/gemmaverse/forgis/" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 font-semibold">features in its Gemmaverse</a>.
+                  Google DeepMind <a href="https://deepmind.google/models/gemma/gemmaverse/forgis/#:~:text=Hyperion%20builds%20representations,Head%20of%20Research%2C%20Forgis" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 font-semibold">features in its Gemmaverse</a>.
                   We came through the <strong>Google DeepMind Accelerator</strong> and won a <strong>$300k GPU grant</strong> from the Swiss National
                   Supercomputing Centre. Before Forgis I co-founded a startup that reached <strong>€500k revenue</strong> in 10 months.
                 </p>

@@ -45,7 +45,7 @@ const events: Event[] = [
   { id: "accel", label: "DeepMind Accelerator", href: "https://deepmind.google/accelerators/robotics/", x: 615, side: "bottom", external: true, year: "'26" },
   { id: "grant", label: "$300k compute", href: "https://lnkd.in/p/eKv4q8Zp", x: 685, side: "top", external: true, year: "'26" },
   { id: "neurips", label: "5 × NeurIPS", href: "#publications", x: 750, side: "bottom", year: "'26" },
-  { id: "gemma", label: "Gemmaverse", href: "https://deepmind.google/models/gemma/gemmaverse/forgis/", x: 810, side: "top", external: true, year: "'26" },
+  { id: "gemma", label: "Gemmaverse", href: "https://deepmind.google/models/gemma/gemmaverse/forgis/#:~:text=Hyperion%20builds%20representations,Head%20of%20Research%2C%20Forgis", x: 810, side: "top", external: true, year: "'26" },
 ];
 
 const ticks = [
