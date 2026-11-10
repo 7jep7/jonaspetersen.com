@@ -293,7 +293,7 @@ export default function Home() {
               on data from real machines. Write to me with a paper you liked and why.
             </p>
             <Button asChild variant="outline" size="sm" className="mt-4 border-gray-600 text-gray-300 hover:border-orange-500 hover:text-orange-500">
-              <a href="mailto:je77petersen@gmail.com?subject=Research%20at%20Forgis"><Mail className="w-4 h-4 mr-2" />Write to me</a>
+              <a href="mailto:jonas.petersen@forgis.com?subject=Research%20at%20Forgis"><Mail className="w-4 h-4 mr-2" />Write to me</a>
             </Button>
           </div>
         </section>

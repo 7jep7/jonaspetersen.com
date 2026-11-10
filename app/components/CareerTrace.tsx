@@ -16,6 +16,7 @@ interface Period {
   to: number;
   side: Side;
   labelX?: number; // badge centre, when the bracket centre collides
+  years: string;
   external?: boolean;
 }
 
@@ -27,23 +28,24 @@ interface Event {
   side: Side;
   external?: boolean;
   inner?: boolean; // badge sits in the inner row, close to the line
+  year: string;
 }
 
 const periods: Period[] = [
-  { label: "Imperial · Dean's List", href: "#wildfire", from: 20, to: 200, side: "top" },
-  { label: "Cambridge · Distinction", href: "/cv.pdf", external: true, from: 206, to: 286, side: "bottom" },
-  { label: "Co-founded K2", href: "#k2", from: 292, to: 400, side: "top", labelX: 362 },
+  { label: "Imperial · Dean's List", href: "#wildfire", from: 20, to: 200, side: "top", years: "'18–'22" },
+  { label: "Cambridge · Distinction", href: "/cv.pdf", external: true, from: 206, to: 286, side: "bottom", years: "'22–'23" },
+  { label: "Co-founded K2", href: "#k2", from: 292, to: 400, side: "top", labelX: 362, years: "'23–'25" },
 ];
 
 const events: Event[] = [
-  { id: "bcg", label: "BCG offer · declined", href: "#k2", x: 289, side: "top" },
-  { id: "forgis", label: "Forgis", href: "#forgis", x: 412, side: "bottom" },
-  { id: "eth", label: "ETH · Siegwart", href: "https://asl.ethz.ch/", x: 478, side: "top", external: true, inner: true },
-  { id: "icml", label: "5 × ICML", href: "#publications", x: 548, side: "top" },
-  { id: "accel", label: "DeepMind Accelerator", href: "https://deepmind.google/accelerators/robotics/", x: 615, side: "bottom", external: true },
-  { id: "grant", label: "$300k compute", href: "https://lnkd.in/p/eKv4q8Zp", x: 685, side: "top", external: true },
-  { id: "neurips", label: "5 × NeurIPS", href: "#publications", x: 750, side: "bottom" },
-  { id: "gemma", label: "Gemmaverse", href: "https://deepmind.google/models/gemma/gemmaverse/forgis/", x: 810, side: "top", external: true },
+  { id: "bcg", label: "BCG offer · declined", href: "#k2", x: 289, side: "top", year: "'23" },
+  { id: "forgis", label: "Forgis", href: "#forgis", x: 412, side: "bottom", year: "'25" },
+  { id: "eth", label: "ETH · Siegwart", href: "https://asl.ethz.ch/", x: 478, side: "top", external: true, inner: true, year: "'26" },
+  { id: "icml", label: "5 × ICML", href: "#publications", x: 548, side: "top", year: "'26" },
+  { id: "accel", label: "DeepMind Accelerator", href: "https://deepmind.google/accelerators/robotics/", x: 615, side: "bottom", external: true, year: "'26" },
+  { id: "grant", label: "$300k compute", href: "https://lnkd.in/p/eKv4q8Zp", x: 685, side: "top", external: true, year: "'26" },
+  { id: "neurips", label: "5 × NeurIPS", href: "#publications", x: 750, side: "bottom", year: "'26" },
+  { id: "gemma", label: "Gemmaverse", href: "https://deepmind.google/models/gemma/gemmaverse/forgis/", x: 810, side: "top", external: true, year: "'26" },
 ];
 
 const ticks = [
@@ -79,10 +81,17 @@ const futurePath = trace(NOW, W);
 const band = `M${NOW},${BASE}L${W},${BASE - 26}L${W},${BASE + 26}Z`;
 const pct = (x: number) => `${(x / W) * 100}%`;
 
-const badge =
-  "absolute -translate-x-1/2 whitespace-nowrap rounded-full border border-gray-700 bg-gray-900 px-2 py-0.5 " +
+const pill =
+  "whitespace-nowrap rounded-full border border-gray-700 bg-gray-900 px-2 py-0.5 " +
   "text-[11px] leading-4 text-gray-300 transition-colors hover:border-orange-500 hover:text-orange-400 " +
   "focus-visible:border-orange-500 focus-visible:outline-none career-fade";
+const badge = "absolute -translate-x-1/2 " + pill;
+
+// Phones get the same log top to bottom, newest first.
+const rows = [
+  ...events.map((e) => ({ key: e.id, label: e.label, href: e.href, external: e.external, at: e.x, year: e.year, span: false })),
+  ...periods.map((p) => ({ key: p.label, label: p.label, href: p.href, external: p.external, at: p.from, year: p.years, span: true })),
+].sort((a, b) => b.at - a.at);
 
 export function CareerTrace() {
   const [active, setActive] = useState<string | null>(null);
@@ -98,8 +107,33 @@ export function CareerTrace() {
     external ? { href, target: "_blank", rel: "noopener noreferrer" } : { href };
 
   return (
-    <div className="mt-6">
-      <div className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-1">Anomaly log</div>
+    <div className="mt-12 md:mt-6">
+      <div className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-3 md:mb-1">Anomaly log</div>
+      <ol className="md:hidden">
+        <li className="flex gap-3">
+          <span className="w-12 shrink-0 text-right font-mono text-[10px] text-gray-500 pt-1">next</span>
+          <span className="w-0 shrink-0 border-l border-dashed border-orange-400/80" />
+          <span className="pl-3 pb-3 font-mono text-[11px] text-gray-500"
+            title="We forecast machine failures for a living. Our own forecast has wide error bars.">?</span>
+        </li>
+        {rows.map((r, i) => (
+          <li key={r.key} className="flex gap-3">
+            <span className="w-12 shrink-0 text-right font-mono text-[10px] text-gray-500 pt-1.5">
+              {r.year !== rows[i - 1]?.year && r.year}
+            </span>
+            <span className="relative w-px shrink-0 bg-orange-500/70">
+              <span className={`absolute left-1/2 top-[11px] h-[7px] w-[7px] -translate-x-1/2 rounded-full ${r.span ? "border border-orange-500 bg-gray-900" : "bg-orange-500"}`} />
+            </span>
+            <span className="pl-3 pb-2">
+              <a {...linkProps(r.href, r.external)} className={`${pill} inline-block`} style={{ animationDelay: `${i * 0.04}s` }}>
+                {r.label}
+              </a>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <div className="text-right font-mono text-[10px] text-gray-600 mt-2 md:hidden">Not to scale. 2026 was long.</div>
+      <div className="hidden md:block">
       <div ref={scroller} className="overflow-x-auto overflow-y-hidden [scrollbar-width:none]">
         <div className="relative min-w-[760px]" style={{ height: H }}>
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full" aria-hidden="true">
@@ -173,6 +207,7 @@ export function CareerTrace() {
         <div className="h-4 min-w-[760px]" />
       </div>
       <div className="text-right font-mono text-[10px] text-gray-600 mt-1">x-axis not to scale. 2026 was long.</div>
+      </div>
     </div>
   );
 }
