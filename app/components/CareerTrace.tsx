@@ -93,6 +93,33 @@ const rows = [
   ...periods.map((p) => ({ key: p.label, label: p.label, href: p.href, external: p.external, at: p.from, year: p.years, span: true })),
 ].sort((a, b) => b.at - a.at);
 
+// Phones: the same trace, rotated. Time runs bottom to top, newest at the top.
+const FORE = 44; // forecast zone above "now"
+const ROW = 32;
+const VW = 52;
+const VX = 48; // left edge of the trace column
+const VBASE = 12;
+const VSPIKE = 24;
+const VH = FORE + rows.length * ROW;
+const rowY = (i: number) => FORE + i * ROW + ROW / 2;
+
+function vTrace(from: number, to: number) {
+  let d = "";
+  for (let y = from; y <= to; y += 2) {
+    let v = noise(y * 1.3);
+    rows.forEach((r, i) => {
+      const dy = y - rowY(i);
+      v += r.span ? 7 * Math.exp(-(dy * dy) / 60) : VSPIKE * Math.exp(-(dy * dy) / 10);
+    });
+    d += `${y === from ? "M" : "L"}${(VBASE + v).toFixed(1)},${y}`;
+  }
+  return d;
+}
+
+const vPast = vTrace(FORE, VH);
+const vFuture = vTrace(0, FORE);
+const vBand = `M${VBASE},${FORE}L${VBASE - 10},0L${VBASE + 26},0Z`;
+
 export function CareerTrace() {
   const [active, setActive] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -109,29 +136,41 @@ export function CareerTrace() {
   return (
     <div className="mt-12 md:mt-6">
       <div className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-3 md:mb-1">Anomaly log</div>
-      <ol className="md:hidden">
-        <li className="flex gap-3">
-          <span className="w-12 shrink-0 text-right font-mono text-[10px] text-gray-500 pt-1">next</span>
-          <span className="w-0 shrink-0 border-l border-dashed border-orange-400/80" />
-          <span className="pl-3 pb-3 font-mono text-[11px] text-gray-500"
-            title="We forecast machine failures for a living. Our own forecast has wide error bars.">?</span>
-        </li>
+      <div className="md:hidden relative" style={{ height: VH }}>
+        <svg width={VW} height={VH} className="absolute top-0" style={{ left: VX }} aria-hidden="true">
+          <path d={vBand} className="fill-orange-500/10 career-fade" style={{ animationDelay: "1.2s" }} />
+          <g className="career-fade" style={{ animationDelay: "1.2s" }}>
+            <path d={vFuture} fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4"
+              className="text-orange-400/80 career-flow" />
+          </g>
+          <line x1={2} x2={VW - 6} y1={FORE} y2={FORE} stroke="currentColor" strokeWidth="1" className="text-gray-600" />
+          {rows.map((r, i) => !r.span && (
+            <line key={r.key} x1={VBASE + VSPIKE + 2} x2={VW} y1={rowY(i)} y2={rowY(i)} stroke="currentColor"
+              strokeWidth="1" strokeDasharray="1 3" className="text-gray-600 career-fade" />
+          ))}
+          <clipPath id="career-wipe-v">
+            <rect width={VW} height={VH} className="career-wipe-v" />
+          </clipPath>
+          <path d={vPast} clipPath="url(#career-wipe-v)" fill="none" stroke="currentColor" strokeWidth="1.5"
+            className="text-orange-500" />
+        </svg>
+        <span className="absolute w-10 text-right font-mono text-[10px] uppercase tracking-widest text-gray-500"
+          style={{ left: 0, top: FORE - 6 }}>now</span>
+        <span className="absolute font-mono text-[11px] text-gray-500 career-fade" style={{ left: VX + VW + 8, top: 4, animationDelay: "1.4s" }}
+          title="We forecast machine failures for a living. Our own forecast has wide error bars.">?</span>
         {rows.map((r, i) => (
-          <li key={r.key} className="flex gap-3">
-            <span className="w-12 shrink-0 text-right font-mono text-[10px] text-gray-500 pt-1.5">
-              {r.year !== rows[i - 1]?.year && r.year}
-            </span>
-            <span className="relative w-px shrink-0 bg-orange-500/70">
-              <span className={`absolute left-1/2 top-[11px] h-[7px] w-[7px] -translate-x-1/2 rounded-full ${r.span ? "border border-orange-500 bg-gray-900" : "bg-orange-500"}`} />
-            </span>
-            <span className="pl-3 pb-2">
-              <a {...linkProps(r.href, r.external)} className={`${pill} inline-block`} style={{ animationDelay: `${i * 0.04}s` }}>
-                {r.label}
-              </a>
-            </span>
-          </li>
+          <div key={r.key}>
+            {r.year !== rows[i - 1]?.year && (
+              <span className="absolute w-10 -translate-y-1/2 text-right font-mono text-[10px] text-gray-500"
+                style={{ left: 0, top: rowY(i) }}>{r.year}</span>
+            )}
+            <a {...linkProps(r.href, r.external)} className={`${pill} absolute -translate-y-1/2`}
+              style={{ left: VX + VW + 8, top: rowY(i), animationDelay: `${1.2 - i * 0.08}s` }}>
+              {r.label}
+            </a>
+          </div>
         ))}
-      </ol>
+      </div>
       <div className="text-right font-mono text-[10px] text-gray-600 mt-2 md:hidden">Not to scale. 2026 was long.</div>
       <div className="hidden md:block">
       <div ref={scroller} className="overflow-x-auto overflow-y-hidden [scrollbar-width:none]">

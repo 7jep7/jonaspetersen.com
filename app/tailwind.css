@@ -132,3 +132,6 @@ body {
   background-size: 32px 32px;
   background-position: center top;
 }
+.career-wipe-v { transform-box: fill-box; transform-origin: bottom; animation: career-wipe-v 1.2s ease-out both; }
+@keyframes career-wipe-v { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .career-wipe-v { animation: none; } }
