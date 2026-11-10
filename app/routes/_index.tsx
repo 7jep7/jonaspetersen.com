@@ -100,7 +100,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 blueprint text-white">
+    <div className="min-h-screen edge-clip bg-gray-900 blueprint text-white">
       {/* Header */}
       <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out border-b ${isScrolled
           ? 'bg-gray-900/60 backdrop-blur-2xl border-gray-600/20 shadow-xl shadow-black/10'

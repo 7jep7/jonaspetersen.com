@@ -111,17 +111,53 @@ const pct = (x: number) => `${(x / W) * 100}%`;
 
 // Phones: the same signal turned upright. Time runs bottom to top, top spikes point right.
 const K = 0.85; // px per time unit
-const FORE = 56; // forecast zone above "now"
-const MW = 96; // trace column width
+const FORE = 51; // forecast zone above "now": 60 time units
+const MW = 80; // trace column width
 const CX = MW / 2;
-const HS = 0.85; // horizontal scale of the signal
+const HS = 0.7; // horizontal scale of the signal
 const OLD = 400; // before Forgis the phone axis is compressed further
 const K_OLD = 0.55;
 const ty = (x: number) => FORE + (NOW - Math.max(x, OLD)) * K + Math.max(OLD - x, 0) * K_OLD;
-const VH = ty(0) + 12;
+const VH = ty(0);
 const vPast = polyline(range(0, NOW).map((x) => [CX - signal(x) * HS, ty(x)]));
 const vFuture = polyline(range(NOW, NOW + FORE / K).map((x) => [CX - signal(x) * HS, ty(x)])).d;
-const vBand = `M${CX},${FORE}L${CX - 22},0L${CX + 22},0Z`;
+
+// The trace runs in from the screen edge and out again, so it never stops mid-air.
+// Desktop: straight extensions left and right, drawn 1:1 in px.
+const EXT = 2400;
+const DS = 0.85; // px per time unit in the desktop strip (848 px for 1000 units)
+const leftExt = polyline(range(0, EXT, 3).map((px) => [px, BASE + noise((px - EXT) / DS)])).d;
+const rightExt = polyline(range(0, EXT, 3).map((px) => [px, BASE + signal(W + px / DS)])).d;
+
+// Phones: the trace sweeps in from the bottom left and leaves to the top right.
+type Pt = [number, number];
+function bend(p0: Pt, p1: Pt, p2: Pt, n: number, sig: (s: number, len: number) => number) {
+  const base: Pt[] = [];
+  const tan: Pt[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const u = 1 - t;
+    base.push([u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]]);
+    const dx = 2 * u * (p1[0] - p0[0]) + 2 * t * (p2[0] - p1[0]);
+    const dy = 2 * u * (p1[1] - p0[1]) + 2 * t * (p2[1] - p1[1]);
+    const m = Math.hypot(dx, dy) || 1;
+    tan.push([dx / m, dy / m]);
+  }
+  const arc = [0];
+  for (let i = 1; i <= n; i++) arc.push(arc[i - 1] + Math.hypot(base[i][0] - base[i - 1][0], base[i][1] - base[i - 1][1]));
+  const len = arc[n];
+  // Offset along the normal, the same way the upright trace offsets along x.
+  return polyline(base.map(([x, y], i): Pt => {
+    const off = -sig(arc[i], len) * HS;
+    return [x - tan[i][1] * off, y + tan[i][0] * off];
+  })).d;
+}
+const LEADW = 640;
+const LEADH = 96;
+const EXW = 640;
+const EXH = 72;
+const vLead = bend([0, LEADH - 10], [LEADW, LEADH - 10], [LEADW, 0], 700, (a, len) => noise(-(len - a) / K_OLD));
+const vExit = bend([0, EXH], [0, 10], [EXW, 10], 700, (a) => signal(NOW + FORE / K + a / K));
 
 // Pulse targets: the arc length where each spike peaks.
 const targets = (line: { at: number[] }) =>
@@ -193,18 +229,11 @@ const pulseProps = {
 
 export function CareerTrace() {
   const [active, setActive] = useState<string | null>(null);
-  const scroller = useRef<HTMLDivElement>(null);
   const pulse = useRef<SVGPathElement>(null);
   const vPulse = useRef<SVGPathElement>(null);
   const flash = usePulses(pulse, pastTargets, past.len);
   const vFlash = usePulses(vPulse, vTargets, vPast.len);
   const on = (id: string) => active === id || flash === id || vFlash === id;
-
-  // Between the phone and desktop layouts the strip may scroll; start at "now".
-  useEffect(() => {
-    const el = scroller.current;
-    if (el) el.scrollLeft = el.scrollWidth;
-  }, []);
 
   const linkProps = (href: string, external?: boolean) =>
     external ? { href, target: "_blank", rel: "noopener noreferrer" } : { href };
@@ -216,20 +245,28 @@ export function CareerTrace() {
   });
 
   return (
-    <div className="mt-12 md:mt-6">
-      <div className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-3 md:mb-1">Anomaly log</div>
+    <div className="mt-10 lg:mt-6">
+      <div className="font-mono text-[11px] uppercase tracking-widest text-gray-300 mb-3 lg:mb-1">Anomaly log</div>
 
       {/* Phones */}
-      <div className="md:hidden relative" style={{ height: VH }}>
+      <div className="lg:hidden relative" style={{ height: VH, marginTop: EXH - 24, marginBottom: LEADH + 8 }}>
+        <svg width={EXW} height={EXH} className="absolute pointer-events-none" style={{ left: "50%", top: -EXH }} aria-hidden="true">
+          <g className="career-fade" style={{ animationDelay: "1.2s" }}>
+            <path d={vExit} fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4"
+              className="text-orange-400/80 career-flow" />
+          </g>
+        </svg>
+        <svg width={LEADW} height={LEADH} className="absolute pointer-events-none" style={{ left: `calc(50% - ${LEADW}px)`, top: VH }} aria-hidden="true">
+          <path d={vLead} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-orange-500 career-fade" />
+        </svg>
         <svg width={MW} height={VH} className="absolute top-0" style={{ left: `calc(50% - ${CX}px)` }} aria-hidden="true">
-          <path d={vBand} className="fill-orange-500/10 career-fade" style={{ animationDelay: "1.2s" }} />
           <g className="career-fade" style={{ animationDelay: "1.2s" }}>
             <path d={vFuture} fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4"
               className="text-orange-400/80 career-flow" />
           </g>
           <line x1={CX - 30} x2={CX + 30} y1={FORE} y2={FORE} stroke="currentColor" strokeWidth="1" className="text-gray-600" />
           {periods.map((p) => {
-            const x = p.side === "top" ? CX + 36 : CX - 36;
+            const x = p.side === "top" ? CX + 31 : CX - 31;
             const tip = p.side === "top" ? -4 : 4;
             return (
               <path key={p.label} d={`M${x + tip},${ty(p.to)}H${x}V${ty(p.from)}H${x + tip}`} fill="none"
@@ -258,25 +295,37 @@ export function CareerTrace() {
         {[...events.map((e) => ({ key: e.id, label: e.label, href: e.href, external: e.external, x: e.x, side: e.side, id: e.id })),
           ...periods.map((p) => ({ key: p.label, label: p.label, href: p.href, external: p.external, x: (p.from + p.to) / 2, side: p.side, id: "" }))]
           .map((b) => (
-            <a key={b.key} {...linkProps(b.href, b.external)} className={`${pill} ${lit(!!b.id && on(b.id))} absolute -translate-y-1/2`}
-              style={{ [b.side === "top" ? "left" : "right"]: `calc(50% + ${CX + 4}px)`, top: ty(b.x), animationDelay: `${(b.x / NOW) * 1.2}s` }}>
+            <a key={b.key} {...linkProps(b.href, b.external)}
+              className={`${pill} ${lit(!!b.id && on(b.id))} absolute -translate-y-1/2 ${b.side === "top" ? "text-left" : "text-right"}`}
+              // On very narrow screens a long label wraps instead of running off the edge.
+              style={{ [b.side === "top" ? "left" : "right"]: `calc(50% + ${CX + 4}px)`, top: ty(b.x), animationDelay: `${(b.x / NOW) * 1.2}s`,
+                whiteSpace: "normal", width: "max-content", maxWidth: `calc(50vw - ${CX + 16}px)` }}>
               {b.label}
             </a>
           ))}
         {/* Year ticks, each on the side away from the nearest badge */}
         {ticks.map((t, i) => (
-          <span key={t.label} className="absolute -translate-y-1/2 font-mono text-[10px] text-gray-600"
+          <span key={t.label} className="absolute -translate-y-1/2 font-mono text-[10px] text-gray-500"
             style={{ [i % 2 ? "left" : "right"]: "calc(50% + 12px)", top: ty(t.x) }}>
             {t.label}
           </span>
         ))}
       </div>
-      <div className="text-right font-mono text-[10px] text-gray-600 mt-2 md:hidden">Not to scale. 2026 was long.</div>
+      <div className="text-right font-mono text-[10px] text-gray-500 lg:hidden">Not to scale. 2026 was long.</div>
 
       {/* Desktop */}
-      <div className="hidden md:block">
-        <div ref={scroller} className="overflow-x-auto overflow-y-hidden [scrollbar-width:none]">
-          <div className="relative min-w-[760px]" style={{ height: H }}>
+      <div className="hidden lg:block">
+        <div>
+          <div className="relative" style={{ height: H }}>
+            <svg width={EXT} height={H} className="absolute top-0 pointer-events-none" style={{ right: "100%" }} aria-hidden="true">
+              <path d={leftExt} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-orange-500 career-fade" />
+            </svg>
+            <svg width={EXT} height={H} className="absolute top-0 pointer-events-none" style={{ left: "100%" }} aria-hidden="true">
+              <g className="career-fade" style={{ animationDelay: "1.2s" }}>
+                <path d={rightExt} fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4"
+                  className="text-orange-400/80 career-flow" />
+              </g>
+            </svg>
             <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full" aria-hidden="true">
               {/* Periods: brackets on the axis */}
               {periods.map((p) => {
@@ -302,7 +351,12 @@ export function CareerTrace() {
               <path d={past.d} clipPath="url(#career-wipe)" fill="none" stroke="currentColor" strokeWidth="1.5"
                 vectorEffect="non-scaling-stroke" className="text-orange-500" />
               <path ref={pulse} d={past.d} {...pulseProps} />
-              <path d={band} className="fill-orange-500/10 career-fade" style={{ animationDelay: "1.2s" }} />
+              {/* Forecast cone, fading out so it has no hard edge */}
+              <linearGradient id="career-cone" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0" stopColor="#f97316" stopOpacity="0.14" />
+                <stop offset="1" stopColor="#f97316" stopOpacity="0" />
+              </linearGradient>
+              <path d={band} fill="url(#career-cone)" className="career-fade" style={{ animationDelay: "1.2s" }} />
               <g className="career-fade" style={{ animationDelay: "1.2s" }}>
                 <path d={futurePath} fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4"
                   vectorEffect="non-scaling-stroke" className="text-orange-400/80 career-flow" />
@@ -339,15 +393,15 @@ export function CareerTrace() {
               now
             </span>
             {ticks.map((t) => (
-              <span key={t.label} className="absolute -translate-x-1/2 font-mono text-[10px] text-gray-600"
+              <span key={t.label} className="absolute -translate-x-1/2 font-mono text-[10px] text-gray-500"
                 style={{ left: pct(t.x), bottom: -14 }}>
                 {t.label}
               </span>
             ))}
           </div>
-          <div className="h-4 min-w-[760px]" />
+          <div className="h-4" />
         </div>
-        <div className="text-right font-mono text-[10px] text-gray-600 mt-1">x-axis not to scale. 2026 was long.</div>
+        <div className="text-right font-mono text-[10px] text-gray-500 mt-1">x-axis not to scale. 2026 was long.</div>
       </div>
     </div>
   );
